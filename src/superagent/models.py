@@ -1,6 +1,6 @@
 """The closed, versioned planner contract. No SQL or executable code fields."""
 from typing import Annotated, Literal
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
 
 
 class StrictModel(BaseModel):
@@ -36,6 +36,14 @@ class Expression(StrictModel):
     left: Scalar | Operand = None
     right: Scalar | Operand = None
     args: list['Expression | bool'] = Field(default_factory=list, max_length=20)
+
+    @model_serializer(mode='wrap')
+    def serialize(self, handler):
+        data = handler(self)
+        if self.op in ('all','any','not'):
+            data.pop('left',None)
+            data.pop('right',None)
+        return data
 
     @model_validator(mode='after')
     def arity(self):

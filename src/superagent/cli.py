@@ -23,7 +23,21 @@ def main(argv=None):
     init.add_argument('--from-db',action='store_true',help='Discover tables in your PostgreSQL schema')
     init.add_argument('--schema',default='public')
     init.add_argument('--schema-file',default='.superagent/schema.json')
-    for name in ('init-db','schema','explain','execute','run'):
+    tool_cmd = sub.add_parser('tools',help='Manage application-wide approved backend tools')
+    tool_sub = tool_cmd.add_subparsers(dest='tool_command',required=True)
+    for name in ('publish','list','revoke','export'):
+        cmd = tool_sub.add_parser(name)
+        cmd.add_argument('--config',default='superagent.yaml')
+        if name == 'publish':
+            cmd.add_argument('--file',required=True)
+        if name in ('revoke','export'):
+            cmd.add_argument('--id',required=True)
+            cmd.add_argument('--version',type=int,required=True)
+        if name == 'revoke':
+            cmd.add_argument('--reason',required=True)
+        if name == 'export':
+            cmd.add_argument('--output',required=True)
+    for name in ('init-db','schema','doctor','explain','execute','run'):
         cmd = sub.add_parser(name)
         cmd.add_argument('--config',default='superagent.yaml')
         if name in ('schema','run'):
@@ -37,6 +51,7 @@ def main(argv=None):
         if name == 'run':
             cmd.add_argument('--host',default='127.0.0.1')
             cmd.add_argument('--port',type=int,default=8000)
+            cmd.add_argument('--tools-only',action='store_true',help='Run approved tools without an AI credential')
     args = parser.parse_args(argv)
     try:
         if hasattr(args,'schema_file') and (args.command != 'init' or args.from_db):
@@ -78,6 +93,35 @@ def main(argv=None):
         url = os.environ.get(cfg.database.url_env)
         if not url:
             raise ValueError(f'{cfg.database.url_env} is required')
+        if args.command == 'doctor':
+            from .doctor import doctor
+            report = doctor(cfg,url)
+            print(json.dumps(report,indent=2,default=str))
+            return 0 if report['ready'] else 1
+        if args.command == 'tools':
+            from .tools.registry import ToolRegistry
+            from .tools.models import ToolManifest
+            from .revisions import schema_revision, policy_revision
+            registry = ToolRegistry(url)
+            if args.tool_command == 'publish':
+                tool = ToolManifest.model_validate_json(Path(args.file).read_text())
+                with psycopg.connect(url) as conn:
+                    catalog = introspect(conn,cfg)
+                if (tool.app != cfg.app or tool.schema_revision != schema_revision(catalog,cfg)
+                        or tool.policy_revision != policy_revision(cfg)):
+                    raise ValueError('tool application or revisions are incompatible')
+                print(json.dumps({'digest':registry.publish(tool),'status':'published'}))
+            elif args.tool_command == 'list':
+                print(json.dumps(registry.list(cfg.app),indent=2,default=str))
+            elif args.tool_command == 'revoke':
+                registry.revoke(cfg.app,args.id,args.version,args.reason)
+                print('Revoked tool version.')
+            elif args.tool_command == 'export':
+                tool = registry.get(cfg.app,args.id,args.version)
+                with Path(args.output).open('x') as handle:
+                    handle.write(tool.model_dump_json(indent=2)+'\n')
+                print(f'Exported {args.output}.')
+            return 0
         with psycopg.connect(url,autocommit=True) as conn:
             if args.command == 'init-db':
                 initialize_internal(conn)
@@ -89,7 +133,9 @@ def main(argv=None):
             if args.command == 'schema':
                 print(f'Saved allowed PostgreSQL metadata to {args.schema_file}.')
                 return 0
-        if args.command == 'run' or not getattr(args,'plan',None):
+        if args.command == 'run' and args.tools_only:
+            planner = None
+        elif args.command == 'run' or not getattr(args,'plan',None):
             from .planner import OpenAIPlanner
             planner = OpenAIPlanner(cfg.planner)
         else:

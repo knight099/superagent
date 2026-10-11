@@ -111,3 +111,12 @@ def test_reference_types_must_be_compatible():
         insert(values={'title':'x','creator_id':{'ref':'r','column':'title'}})]})
     with pytest.raises(Rejection, match='type'):
         validate(p,catalog(),config())
+
+
+def test_application_policy_config_roundtrips_without_relaxing_arity():
+    from superagent.config import Config,load_config
+    from superagent.models import Expression
+    cfg=load_config('examples/project_management/config.yaml')
+    assert Config.model_validate(cfg.model_dump()).model_dump()==cfg.model_dump()
+    with pytest.raises(ValueError):
+        Expression.model_validate({'op':'any','args':[True],'left':None})
