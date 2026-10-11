@@ -25,6 +25,7 @@ class Executor:
                     cfg = self.config.tables[op.table]
                     table = self.catalog.tables[op.table]
                     qualified = sql.Identifier(*op.table.split('.'))
+                    effects = []
                     if op.kind == 'select':
                         where = predicate_sql(op.where, resolve)
                         policy = policy_sql(cfg.permissions[op.kind], identity)
@@ -49,6 +50,7 @@ class Executor:
                             raise Rejection('insert authorization denied')
                         check_after(cfg, 'insert', before, row, identity)
                         rows = [{k: row[k] for k in op.returning}]
+                        effects.append({'before':None,'after':row})
                         affected = 1
                     else:
                         if not table.primary_key:
@@ -83,10 +85,12 @@ class Executor:
                                     [*[resolve(v) for v in op.values.values()], *pk_values])
                                 after = cur.fetchone()
                                 check_after(cfg, 'update', before, after, identity)
+                            effects.append({'before':{k:before[k] for k in cfg.columns},
+                                            'after':None if op.kind == 'delete' else after})
                             rows.append({k: after[k] for k in op.returning})
                         affected = len(targets)
                     affected_total += affected
                     results[op.id] = rows
                     changes.append({'id': op.id, 'kind': op.kind, 'table': op.table,
-                                    'affected': affected, 'rows': rows})
+                                    'affected': affected, 'rows': rows, 'effects':effects})
         return changes

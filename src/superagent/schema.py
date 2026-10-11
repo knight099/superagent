@@ -47,13 +47,22 @@ def introspect(conn, config) -> Catalog:
             cur.execute('''SELECT con.contype AS kind, pg_get_constraintdef(con.oid) AS definition,
                 ARRAY(SELECT a.attname FROM unnest(con.conkey) WITH ORDINALITY k(num, ord)
                     JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.num
-                    ORDER BY k.ord) AS columns
+                    ORDER BY k.ord) AS columns,
+                rn.nspname || '.' || rc.relname AS foreign_table,
+                ARRAY(SELECT a.attname FROM unnest(con.confkey) WITH ORDINALITY k(num, ord)
+                    JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = k.num
+                    ORDER BY k.ord) AS foreign_columns
                 FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid
                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                LEFT JOIN pg_class rc ON rc.oid = con.confrelid
+                LEFT JOIN pg_namespace rn ON rn.oid = rc.relnamespace
                 WHERE n.nspname = %s AND c.relname = %s''', (schema, name))
             constraints = cur.fetchall()
             # Do not expose definitions mentioning hidden columns to the planner.
-            visible = [c for c in constraints if set(c['columns']) <= set(cfg.columns)]
+            visible = [c for c in constraints if set(c['columns']) <= set(cfg.columns)
+                       and (c['kind'] != 'f' or (c['foreign_table'] in config.tables
+                            and set(c['foreign_columns']) <=
+                                set(config.tables[c['foreign_table']].columns)))]
             primary = next((c['columns'] for c in constraints if c['kind'] == 'p'), [])
             tables[qualified] = Table(schema, name, columns, primary, visible)
     return Catalog(tables)

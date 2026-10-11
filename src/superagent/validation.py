@@ -9,6 +9,7 @@ class Rejection(ValueError):
 def validate(plan, catalog, config):
     if len(plan.operations) > config.limits.max_operations:
         raise Rejection('maximum operations exceeded')
+    from .types import check_literal, compatible, family
     prior = {}
     for op in plan.operations:
         if op.table not in config.tables or op.table not in catalog.tables:
@@ -33,13 +34,31 @@ def validate(plan, catalog, config):
                 raise Rejection('non-null column cannot be null')
         if op.kind == 'select' and op.limit > config.limits.max_read_rows:
             raise Rejection('read limit exceeds configuration')
-        def check(v):
+        def check(v, target):
             if isinstance(v, Reference):
                 if v.ref not in prior or v.column not in prior[v.ref]:
                     raise Rejection('reference must name an earlier returned column')
+                if not compatible(prior[v.ref][v.column], target):
+                    raise Rejection('reference type is incompatible with target column')
             elif isinstance(v, Calculation):
-                check(v.left)
-                check(v.right)
-        for v in [*values.values(), *(p.value for p in getattr(op, 'where', []))]:
-            check(v)
-        prior[op.id] = getattr(op, 'select', getattr(op, 'returning', []))
+                expected = ('date', 'timestamp') if v.calc == 'date_add_days' else ('integer', 'number')
+                if family(target.type) not in expected:
+                    raise Rejection('calculation type is incompatible with target column')
+                check(v.left, target)
+                if isinstance(v.right, Reference):
+                    if v.right.ref not in prior or v.right.column not in prior[v.right.ref]:
+                        raise Rejection('reference must name an earlier returned column')
+                    right_type = family(prior[v.right.ref][v.right.column].type)
+                    if right_type not in ('integer','number'):
+                        raise Rejection('calculation right operand type must be numeric')
+            else:
+                check_literal(v, target)
+        for field, value in values.items():
+            check(value, table.columns[field])
+        for predicate in getattr(op, 'where', []):
+            if predicate.op == 'is_null':
+                continue
+            for value in predicate.value if isinstance(predicate.value, list) else [predicate.value]:
+                check(value, table.columns[predicate.field])
+        returned = getattr(op, 'select', getattr(op, 'returning', []))
+        prior[op.id] = {name: table.columns[name] for name in returned}

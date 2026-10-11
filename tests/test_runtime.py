@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 import json
+import pytest
 from superagent.runtime import Runtime
 from superagent.audit import initialize_internal
 from superagent.models import TransitionPlan
@@ -109,3 +110,42 @@ def test_audit_failure_cannot_commit_mutation(db, db_url, cfg, cat):
     assert result['status'] == 'rejected'
     assert result['error']['code'] == 'audit_unavailable'
     assert db.execute("SELECT count(*) FROM tasks WHERE title='new'").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('operator,value',[('eq','predicate-secret'),('in',['predicate-secret'])])
+def test_sensitive_predicate_values_are_redacted(db,db_url,cfg,cat,operator,value):
+    cfg.tables['public.tasks'].sensitive_columns = ['title']
+    rt = runtime(db,db_url,cfg,cat)
+    p = {'operations':[{'id':'read','kind':'select','table':'public.tasks',
+        'select':['id'],'where':[{'field':'title','op':operator,'value':value}]}]}
+    result = rt.execute('query',{'user_id':1},dry_run=True,plan=p)
+    assert result['status'] == 'explained'
+    assert 'predicate-secret' not in json.dumps(result)
+    record = db.execute('SELECT record FROM superagent_internal.audit').fetchone()[0]
+    assert 'predicate-secret' not in json.dumps(record)
+
+
+def test_audit_contains_before_and_after_for_recovery(db,db_url,cfg,cat):
+    rt = runtime(db,db_url,cfg,cat)
+    p = {'operations':[{'id':'u','kind':'update','table':'public.tasks',
+        'values':{'title':'Changed'},'where':[{'field':'id','op':'eq','value':1}]}]}
+    result = rt.execute('rename',{'user_id':1},'recovery',plan=p)
+    assert result['status'] == 'committed'
+    record = db.execute('SELECT record FROM superagent_internal.audit').fetchone()[0]
+    effect = record['executed_operations'][0]['effects'][0]
+    assert effect['before']['title'] == 'Fix login'
+    assert effect['after']['title'] == 'Changed'
+    assert 'effects' not in result['changes'][0]
+
+
+def test_delete_audit_keeps_before_state_without_returning(db,db_url,cfg,cat):
+    rt=runtime(db,db_url,cfg,cat)
+    p={'operations':[{'id':'d','kind':'delete','table':'public.tasks',
+        'where':[{'field':'id','op':'eq','value':1}]}]}
+    result=rt.execute('delete',{'user_id':1},'delete-audit',plan=p)
+    assert result['status'] == 'committed'
+    record=db.execute('SELECT record FROM superagent_internal.audit').fetchone()[0]
+    effect=record['executed_operations'][0]['effects'][0]
+    assert effect['before']['id'] == 1
+    assert effect['before']['title'] == 'Fix login'
+    assert effect['after'] is None

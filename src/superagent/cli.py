@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import sys
 import psycopg
-from .config import load_config
+from .config import load_config, parse_user_id
 from .schema import introspect
 from .models import TransitionPlan
 from .runtime import Runtime
@@ -59,8 +59,7 @@ def main(argv=None):
             from .api import create_app
             uvicorn.run(create_app(runtime),host=args.host,port=args.port)
             return 0
-        identity = {'user_id':int(args.user_id) if args.user_id.isascii() and
-                    args.user_id.isdigit() else args.user_id}
+        identity = {'user_id':parse_user_id(args.user_id, cfg.auth)}
         supplied = TransitionPlan.model_validate_json(Path(args.plan).read_text()) if args.plan else None
         if args.command == 'explain' and supplied:
             result = runtime.explain(supplied,identity)

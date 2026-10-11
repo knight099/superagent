@@ -83,3 +83,49 @@ def test_cli_explain_runs_no_plan_sql(db,db_url,tmp_path,monkeypatch,capsys):
     assert main(['explain','--config',str(target),'--plan',str(planfile),'--user-id','1']) == 0
     assert 'explained' in capsys.readouterr().out
     assert db.execute("SELECT count(*) FROM tasks WHERE title='new'").fetchone()[0] == 0
+
+
+def test_string_identity_preserves_leading_zero_and_idempotency_scope(db,db_url,cfg,cat):
+    cfg.auth.user_id_type = 'string'
+    initialize_internal(db)
+    client = TestClient(create_app(Runtime(db_url,cfg,cat,CountingPlanner())))
+    first = client.post('/v1/execute',headers={'X-User-ID':'01','Idempotency-Key':'shared'},
+                        json={'intent':'create'})
+    second = client.post('/v1/execute',headers={'X-User-ID':'1','Idempotency-Key':'shared'},
+                         json={'intent':'create'})
+    assert first.status_code == second.status_code == 200
+    assert first.json()['audit_id'] != second.json()['audit_id']
+    scopes = {row[0] for row in db.execute('SELECT identity FROM superagent_internal.requests')}
+    assert scopes == {'"01"','"1"'}
+
+
+def test_integer_identity_rejects_noncanonical_form(db,db_url,cfg,cat):
+    initialize_internal(db)
+    client = TestClient(create_app(Runtime(db_url,cfg,cat,CountingPlanner())))
+    assert client.post('/v1/execute',headers={'X-User-ID':'01'},
+                       json={'intent':'query','dry_run':True}).status_code == 401
+
+
+def test_planner_does_not_receive_hidden_foreign_relationship(db,cfg):
+    from superagent.schema import introspect
+    from superagent.config import Config
+    db.execute('CREATE SCHEMA hidden; CREATE TABLE hidden.secret_table (secret_id int PRIMARY KEY);'
+               'CREATE TABLE public.visible (id int PRIMARY KEY, link int REFERENCES hidden.secret_table)')
+    cfg = Config.model_validate({'app':'meta','tables':{'public.visible':{
+        'columns':['id','link'],'permissions':{'select':True}}}})
+    cat = introspect(db,cfg)
+    def respond(request):
+        assert 'secret_table' not in request.content.decode()
+        assert 'secret_id' not in request.content.decode()
+        return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps({
+            'operations':[{'id':'r','kind':'select','table':'public.visible','select':['id']}]})}}]})
+    client=httpx.Client(transport=httpx.MockTransport(respond))
+    OpenAIPlanner(cfg.planner,api_key='test',client=client).plan('read',cat,cfg,{'user_id':1})
+
+
+def test_cli_identity_parser_uses_explicit_type():
+    from superagent.config import AuthConfig, parse_user_id
+    assert parse_user_id('01',AuthConfig(user_id_type='string')) == '01'
+    assert parse_user_id('1',AuthConfig()) == 1
+    with pytest.raises(ValueError):
+        parse_user_id('01',AuthConfig())

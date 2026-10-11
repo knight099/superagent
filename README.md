@@ -64,7 +64,9 @@ cannot be supplied through the HTTP endpoint. `X-User-ID` is a **trusted header*
 put the service behind a gateway that authenticates users, strips client-supplied
 identity headers, and supplies verified identity. The default host is loopback.
 `auth.mode: dev` permits a missing header to become user 1 for local experiments;
-never deploy that mode publicly. There is no built-in JWT/OIDC verification yet.
+never deploy that mode publicly. There is no built-in JWT/OIDC verification yet. Set `auth.user_id_type` to
+`integer` (default) or `string` explicitly. Integer headers/CLI IDs require
+canonical decimal form; string IDs preserve leading zeros and exact spelling.
 
 ## Connect another PostgreSQL application
 
@@ -129,7 +131,9 @@ Calculations support `{"calc":"add","left":1,"right":2}` and
 Date adjustment is limited to ±3650 days; numeric results to magnitude 10^12.
 
 All values are parameterized, including identity and limits. PostgreSQL owns
-value conversion and constraint validation; the compiler owns SQL syntax and
+constraint validation; static validation checks scalar/reference compatibility
+for integers, numerics, booleans, text, dates, timestamps and UUIDs. Writes to
+other PostgreSQL types are rejected in v0.1. The compiler owns SQL syntax and
 identifier quoting. Model responses are strictly parsed with Pydantic before
 validation. Provider constrained decoding is advisory: dynamic column maps use
 JSON-schema mode without vendor-specific strict decoding.
@@ -192,7 +196,8 @@ planning happens after replay lookup. Claims may wait up to the statement timeou
 a timed-out duplicate can safely retry the same request/key.
 
 `superagent_internal.audit` stores JSON records containing identity, original
-intent, proposed plan, decision, results/errors, timing and audit ID. Committed
+intent, proposed plan, decision, results/errors, permitted before/after mutation effects independent of
+requested returning columns, provider token usage when available, timing and audit ID. Committed
 records and request responses share the mutation transaction; failed records
 are written after rollback. Missing audit storage rejects execution. Raw SQL
 exception text and provider response bodies are never returned. Set table

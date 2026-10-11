@@ -3,6 +3,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import Field
 from .models import StrictModel
+from .config import parse_user_id
 
 
 class ExecuteRequest(StrictModel):
@@ -24,7 +25,10 @@ def create_app(runtime):
             x_user_id = '1'
         if x_user_id is None or not x_user_id.strip() or len(x_user_id) > 128:
             raise HTTPException(status_code=401, detail='Authenticated X-User-ID required')
-        user_id = int(x_user_id) if x_user_id.isascii() and x_user_id.isdigit() else x_user_id
+        try:
+            user_id = parse_user_id(x_user_id, runtime.config.auth)
+        except ValueError:
+            raise HTTPException(status_code=401, detail='Invalid identity format') from None
         result = runtime.execute(body.intent, {'user_id':user_id},idempotency_key,
                                  dry_run=body.dry_run)
         status = 200

@@ -1,5 +1,7 @@
 """Developer-owned configuration; untrusted requests cannot change it."""
 from pathlib import Path
+from typing import Literal
+import re
 import yaml
 from pydantic import Field, model_validator
 from .models import StrictModel, Name, TableName, Expression, Operand
@@ -54,6 +56,7 @@ class PlannerConfig(StrictModel):
 
 
 class AuthConfig(StrictModel):
+    user_id_type: Literal['integer', 'string'] = 'integer'
     mode: str = 'trusted_header'
 
     @model_validator(mode='after')
@@ -81,3 +84,13 @@ class Config(StrictModel):
 
 def load_config(path: str | Path) -> Config:
     return Config.model_validate(yaml.safe_load(Path(path).read_text()))
+
+
+def parse_user_id(text, auth):
+    if not isinstance(text, str) or not text.strip() or len(text) > 128:
+        raise ValueError('invalid identity')
+    if auth.user_id_type == 'string':
+        return text
+    if not re.fullmatch(r'(0|-?[1-9][0-9]*)', text):
+        raise ValueError('integer identity must use canonical decimal form')
+    return int(text)

@@ -30,7 +30,10 @@ def redact(value, config):
     sensitive = {column for table in config.tables.values() for column in table.sensitive_columns}
     def walk(item):
         if isinstance(item, dict):
-            return {k: '[REDACTED]' if k in sensitive else walk(v) for k,v in item.items()}
+            predicate_sensitive = item.get('field') in sensitive
+            return {k: '[REDACTED]' if k in sensitive or
+                    (predicate_sensitive and k == 'value') else walk(v)
+                    for k,v in item.items()}
         if isinstance(item, list):
             return [walk(v) for v in item]
         return item

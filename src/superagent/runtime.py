@@ -61,6 +61,8 @@ class Runtime:
                 raise Rejection('intent must contain 1..8000 characters')
             if not isinstance(identity, dict) or type(identity.get('user_id')) not in (str,int):
                 raise Rejection('stable authenticated user_id required')
+            if type(identity['user_id']) is not (int if self.config.auth.user_id_type == 'integer' else str):
+                raise Rejection('identity user_id type does not match auth configuration')
             if not str(identity['user_id']).strip() or len(json.dumps(identity)) > 4096:
                 raise Rejection('invalid identity context')
             if key is not None and (not isinstance(key,str) or not 1 <= len(key) <= 128):
@@ -86,6 +88,8 @@ class Runtime:
                             return existing[1]
                     proposed = self._plan(intent, identity, plan)
                     record['plan'] = proposed.model_dump()
+                    if self.planner is not None:
+                        record['planner_usage'] = getattr(self.planner, 'usage', {})
                     validate(proposed, self.catalog, self.config)
                     if dry_run:
                         result = self.explain(proposed, identity)
@@ -95,7 +99,9 @@ class Runtime:
                             raise Rejection('mutations require an idempotency key')
                         changes = Executor(self.config, self.catalog).execute(conn, proposed, identity)
                         result = {'status':'committed', 'summary':'Validated transition completed',
-                                  'changes':redact(changes, self.config), 'audit_id':audit_id}
+                                  'changes':redact([{k:v for k,v in change.items() if k != 'effects'}
+                                                    for change in changes], self.config), 'audit_id':audit_id}
+                        record['executed_operations'] = changes
                     result = json_safe(result)
                     record.update({'status':result['status'], 'validation':'accepted',
                                    'result':result, 'finished_at':datetime.now(timezone.utc).isoformat()})

@@ -97,3 +97,17 @@ def test_reserved_schema_config_and_empty_allowlist_rejected():
     with pytest.raises(ValidationError):
         Config.model_validate({'app':'bad','tables':{'superagent_internal.audit':{
             'columns':['id'],'permissions':{'select':True}}}})
+
+
+@pytest.mark.parametrize('value', ['1', True, 1.5])
+def test_integer_columns_reject_incompatible_literals(value):
+    with pytest.raises(Rejection, match='type'):
+        validate(plan(insert(values={'title':'x','creator_id':value})),catalog(),config())
+
+
+def test_reference_types_must_be_compatible():
+    p = TransitionPlan.model_validate({'operations':[
+        {'id':'r','kind':'select','table':'public.tasks','select':['title']},
+        insert(values={'title':'x','creator_id':{'ref':'r','column':'title'}})]})
+    with pytest.raises(Rejection, match='type'):
+        validate(p,catalog(),config())

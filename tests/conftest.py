@@ -19,6 +19,7 @@ def db(db_url):
     with psycopg.connect(db_url, autocommit=True) as conn:
         conn.execute('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public')
         conn.execute('DROP SCHEMA IF EXISTS superagent_internal CASCADE')
+        conn.execute('DROP SCHEMA IF EXISTS hidden CASCADE')
         conn.execute(Path('examples/project_management/schema.sql').read_text())
         yield conn
 
