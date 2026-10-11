@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "superagent-runtime"
-version = "0.1.0"
+version = "0.2.0"
 description = "Validated, transactional PostgreSQL state transitions from user intent"
 requires-python = ">=3.12"
 dependencies = ["pydantic>=2.10,<3", "psycopg[binary]>=3.2,<4", "PyYAML>=6,<7", "fastapi>=0.115,<1", "httpx>=0.27,<1", "uvicorn>=0.30,<1"]

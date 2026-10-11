@@ -82,3 +82,9 @@ successful and rejected/billed calls and evaluate adversarial requests.
 The cost table is arithmetic using sourced rates and explicitly assumed token
 sizes. Use provider billing/usage exports for actual spend; successful-plan audit
 usage alone misses billed failures. See [cost comparison](cost-comparison.md).
+
+## v0.2 follow-up
+
+This file records the v0.1 audit. The current application-wide tools, agent
+schema proposals, release evals, guardrails, observability and repeat-workflow
+measurements are documented in [v0.2 verification](reusable-tools-verification.md).

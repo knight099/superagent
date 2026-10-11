@@ -1,0 +1,42 @@
+{
+  "app": "benchmark_51ce8d2c8df24aa5",
+  "schema_revision": "493d646a13391e38ae589db1f101f76f9f76d918f4c2376c61a992d93c6d9fab",
+  "policy_revision": "9cb75ece07a0d425c52de0bca7087c9fc917416c87b89f8d5b1fcc4ffc435cff",
+  "requests_per_path": 1000,
+  "model_mode": "scripted",
+  "concurrency": 1,
+  "notice": "Local sequential service calls, not HTTP/load/capacity or live-model benchmarks. Baseline retains the same authorization/audit semantics.",
+  "baseline": {
+    "requests": 1000,
+    "provider_calls": 0,
+    "errors": 0,
+    "isolation_checks": 1000,
+    "latency_ms": {
+      "p50": 11.36,
+      "p95": 16.595
+    },
+    "sequential_elapsed_seconds": 11.993
+  },
+  "known_tool": {
+    "requests": 1000,
+    "provider_calls": 0,
+    "errors": 0,
+    "isolation_checks": 1000,
+    "latency_ms": {
+      "p50": 23.588,
+      "p95": 32.072
+    },
+    "sequential_elapsed_seconds": 24.644
+  },
+  "scripted_intent": {
+    "requests": 1000,
+    "provider_calls": 1000,
+    "errors": 0,
+    "isolation_checks": 1000,
+    "latency_ms": {
+      "p50": 36.625,
+      "p95": 48.645
+    },
+    "sequential_elapsed_seconds": 37.85
+  }
+}

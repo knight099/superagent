@@ -13,6 +13,7 @@ from .models import TransitionPlan
 from .runtime import Runtime
 from .audit import initialize_internal
 from .setup import discover_config, save_schema
+from .validation import Rejection
 
 
 def main(argv=None):
@@ -210,7 +211,9 @@ def main(argv=None):
         print(json.dumps(result,indent=2,default=str))
         return 1 if result['status'] == 'rejected' else 0
     except FileExistsError:
-        print('Config already exists; refusing to overwrite.',file=sys.stderr)
+        print('Destination already exists; refusing to overwrite.',file=sys.stderr)
+    except Rejection as exc:
+        print(f'Command rejected: {exc}',file=sys.stderr)
     except Exception:
         # Do not emit connection strings, provider response bodies or SQL error values.
         print('Command failed. Check configuration, credentials, database and plan.',file=sys.stderr)

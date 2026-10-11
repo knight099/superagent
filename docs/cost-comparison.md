@@ -148,3 +148,22 @@ connection concurrency, configuration effort and time spent reviewing policies.
 workflows where you expect reduced backend effort to outweigh inference and
 review costs. A conventional deterministic backend is often the better fit for
 high-volume repetitive endpoints, complex domain logic or strict latency budgets.
+
+## v0.2 reusable tool scenario
+
+v0.2 adds direct approved-tool execution with no model call; natural-language
+intent requests still plan. Use the fraction of requests that actually reach
+planning, not a hoped-for semantic cache hit rate:
+
+```sh
+python scripts/cost_compare.py --requests 100000 --planner-fraction .05 --build-cost 5
+```
+
+This yields $12 monthly inference, $5 **assumed** generation/evaluation expense,
+and $38.15 total under the earlier $21.15 infrastructure assumption. A 95% direct
+tool fraction must come from the actual client workload. Tool drafting, schema
+proposals, failed provider output and evaluations can add cost. The daily model
+call cap limits calls, not dollar invoices. [v0.2 evidence](reusable-tools-verification.md)
+shows 1,000 explicit tool calls with zero provider calls; it does not establish
+that 95% of arbitrary natural-language requests route without planning, or that
+running infrastructure is cheaper than a conventional backend.

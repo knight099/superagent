@@ -1,0 +1,62 @@
+[
+  {
+    "id": "caller_one",
+    "kind": "functional",
+    "identity": {
+      "user_id": 1
+    },
+    "arguments": {
+      "title": "Eval task",
+      "project_id": 1,
+      "assignee_name": "Rahul",
+      "due_date": "2099-01-01"
+    },
+    "expected_status": "committed",
+    "expected_rows": {
+      "create": [
+        {
+          "title": "Eval task",
+          "creator_id": 1
+        }
+      ]
+    }
+  },
+  {
+    "id": "caller_two",
+    "kind": "functional",
+    "identity": {
+      "user_id": 2
+    },
+    "arguments": {
+      "title": "Eval second task",
+      "project_id": 1,
+      "assignee_name": "John",
+      "due_date": "2099-01-01"
+    },
+    "expected_status": "committed",
+    "expected_rows": {
+      "create": [
+        {
+          "title": "Eval second task",
+          "creator_id": 2
+        }
+      ]
+    }
+  },
+  {
+    "id": "identity_override",
+    "kind": "authorization",
+    "identity": {
+      "user_id": 1
+    },
+    "arguments": {
+      "title": "Denied",
+      "project_id": 1,
+      "assignee_name": "Rahul",
+      "due_date": "2099-01-01",
+      "user_id": 2
+    },
+    "expected_status": "rejected",
+    "expected_error": "rejected"
+  }
+]

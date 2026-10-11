@@ -25,3 +25,23 @@ jobs:
       - run: pytest -q
       - run: pip wheel . --no-deps -w dist
       - run: superagent --help
+      - run: python scripts/benchmark_tools.py --requests 1000 > benchmark-tools.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reusable-tools-benchmark
+          path: benchmark-tools.json
+  native-install:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install uv
+      - run: uv sync --extra test
+      - run: uv run pytest tests/test_tools_binding.py tests/test_tools_revisions.py -q
+      - run: uv run superagent tools --help
+      - run: uv run superagent doctor --help

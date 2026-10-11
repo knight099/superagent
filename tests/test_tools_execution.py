@@ -101,3 +101,11 @@ def test_invalid_tool_arguments_are_audited_without_application_effects(db,db_ur
     assert result['status']=='rejected'
     assert db.execute("SELECT count(*) FROM tasks WHERE title='bad'").fetchone()[0]==0
     assert db.execute('SELECT count(*) FROM superagent_internal.audit').fetchone()[0]==1
+
+
+def test_changed_database_default_invalidates_existing_tool(db,db_url):
+    service,registry,tool=configured(db,db_url)
+    db.execute("ALTER TABLE tasks ALTER COLUMN priority SET DEFAULT 'high'")
+    result=service.execute(tool.tool_id,1,{'title':'unexpected-default'},{'user_id':1},'default-drift')
+    assert result['status']=='rejected'
+    assert db.execute("SELECT count(*) FROM tasks WHERE title='unexpected-default'").fetchone()[0]==0

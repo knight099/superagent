@@ -28,6 +28,8 @@ class UsageLedger:
             conn.execute('''INSERT INTO superagent_internal.model_attempts
                 (id,app,purpose,provider,model,status) VALUES (%s,%s,%s,%s,%s,'started')''',
                 (attempt,app,purpose,provider,model))
+        from .observability import emit_attempt
+        emit_attempt(app,attempt,purpose,'started')
         return attempt
 
     def finish(self,attempt_id,status,usage,rates):
@@ -51,10 +53,13 @@ class UsageLedger:
         with psycopg.connect(self.database_url) as conn:
             result=conn.execute('''UPDATE superagent_internal.model_attempts
                 SET status=%s,usage=%s,rates=%s,estimated_usd=%s,finished_at=clock_timestamp()
-                WHERE id=%s AND status='started' ''',
+                WHERE id=%s AND status='started' RETURNING app,purpose''',
                 (status,Jsonb(clean),Jsonb(rates),estimate,attempt_id))
             if result.rowcount!=1:
                 raise ValueError('attempt is unknown or already finished')
+            app,purpose=result.fetchone()
+        from .observability import emit_attempt
+        emit_attempt(app,attempt_id,purpose,status)
 
     def report(self,app,start,end):
         with psycopg.connect(self.database_url,row_factory=dict_row) as conn:

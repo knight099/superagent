@@ -6,6 +6,19 @@ from psycopg.rows import dict_row
 from .usage import UsageLedger
 
 
+def _write(event):
+    try:
+        logging.getLogger('superagent.events').info(json.dumps(event,sort_keys=True))
+    except Exception:
+        # Optional sinks cannot change execution or accounting outcomes.
+        pass
+
+
+def emit_attempt(app,attempt_id,purpose,status):
+    _write({'event':'model_attempt','app':app,'attempt_id':attempt_id,
+            'purpose':purpose,'status':status})
+
+
 def emit(record,*,replayed=False):
     event={key:record.get(key) for key in ('app','audit_id','status','duration_ms','planner_attempt_id')
            if key in record}
@@ -14,12 +27,7 @@ def emit(record,*,replayed=False):
         event['tool']={k:v for k,v in record['tool'].items() if k in ('tool_id','version','digest')}
     if 'error' in record:
         event['error_code']=record['error'].get('code')
-    try:
-        logging.getLogger('superagent.events').info(json.dumps(event,sort_keys=True))
-    except Exception:
-        # Optional telemetry sinks cannot change committed application outcomes.
-        # Transactional audit remains required and propagates its failures.
-        pass
+    _write(event)
 
 
 def report(app,database_url,start,end):

@@ -1,6 +1,7 @@
 """Allowlisted PostgreSQL catalog metadata; contains no row data or secrets."""
 from dataclasses import dataclass, field, asdict
 from psycopg.rows import dict_row
+import hashlib
 
 
 @dataclass
@@ -10,6 +11,7 @@ class Column:
     nullable: bool
     default: bool = False
     generated: bool = False
+    definition_revision: str | None = None
 
 
 @dataclass
@@ -36,12 +38,18 @@ def introspect(conn, config) -> Catalog:
             schema, name = qualified.split('.')
             cur.execute('''SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS type,
                 NOT a.attnotnull AS nullable, a.atthasdef AS default,
-                (a.attgenerated <> '' OR a.attidentity <> '') AS generated
+                (a.attgenerated <> '' OR a.attidentity <> '') AS generated,
+                pg_get_expr(d.adbin,d.adrelid) AS definition
                 FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
                 WHERE n.nspname = %s AND c.relname = %s AND c.relkind = 'r'
                 AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum''', (schema, name))
-            columns = {r['name']: Column(**r) for r in cur.fetchall()}
+            columns = {}
+            for row in cur.fetchall():
+                expression = row.pop('definition')
+                row['definition_revision'] = hashlib.sha256(expression.encode()).hexdigest() if expression else None
+                columns[row['name']] = Column(**row)
             if not columns or set(cfg.columns) - columns.keys():
                 raise ValueError(f'configured table/columns not found: {qualified}')
             cur.execute('''SELECT con.contype AS kind, pg_get_constraintdef(con.oid) AS definition,

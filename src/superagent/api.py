@@ -6,6 +6,7 @@ from .models import StrictModel, Name, Scalar
 from .config import parse_user_id
 from .tools.service import ToolService
 from .guardrails import BodyLimit
+from . import __version__
 
 
 class ExecuteRequest(StrictModel):
@@ -20,7 +21,7 @@ class ToolExecuteRequest(StrictModel):
 
 
 def create_app(runtime):
-    app = FastAPI(title='Superagent', version='0.1.0')
+    app = FastAPI(title='Superagent', version=__version__)
     app.add_middleware(BodyLimit)
     tools = ToolService(runtime)
 
@@ -44,7 +45,7 @@ def create_app(runtime):
 
     @app.get('/health')
     def health():
-        return {'status':'ok','version':'0.1.0'}
+        return {'status':'ok','version':__version__}
 
     @app.post('/v1/execute')
     def execute(body: ExecuteRequest, x_user_id: str | None = Header(default=None),

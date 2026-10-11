@@ -1,6 +1,6 @@
 # Reusable backend tools v0.2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Run approved application-specific data tools for multiple users without
 making a model call on each request, while preserving v0.1 authorization and
@@ -16,7 +16,7 @@ pytest. Keep the existing dependency set; PostgreSQL is registry/ledger storage.
 
 **Spec:** [Adaptive backend design](../specs/2026-10-11-adaptive-backend-design.md).
 
-**Status:** Approved for implementation, including app-wide schemas, guardrails,
+**Status:** Implemented and under final release review, including app-wide schemas, guardrails,
 evals and agent observability requested by the owner. v0.3–v0.5 still require
 separate task plans at their milestones.
 
@@ -77,15 +77,15 @@ and visible constraints. Policy hash covers tables, permissions, after rules,
 invariants, sensitive fields, auth semantics and execution limits; excludes
 credentials, app display name, timestamps and planner settings.
 
-- [ ] Write `test_revisions_stable_under_order_and_timestamp_changes` and
+- [x] Write `test_revisions_stable_under_order_and_timestamp_changes` and
   `test_revisions_change_on_column_permission_or_limit_changes`, asserting
   equality for reordered maps and inequality for each behavioral change.
-- [ ] Run `uv run pytest tests/test_tools_revisions.py -q`; confirm failure.
-- [ ] Implement both revision functions and snapshot fields. Changes to hidden
+- [x] Run `uv run pytest tests/test_tools_revisions.py -q`; confirm failure.
+- [x] Implement both revision functions and snapshot fields. Changes to hidden
   columns must not disclose hidden metadata in the hash input or snapshot.
-- [ ] Run the new tests and existing setup tests against disposable PostgreSQL;
+- [x] Run the new tests and existing setup tests against disposable PostgreSQL;
   all pass, existing snapshot fields remain valid.
-- [ ] Commit `feat: version allowed schema and execution policies`.
+- [x] Commit `feat: version allowed schema and execution policies`.
 
 ### Task 2: Typed tool manifests and binding
 
@@ -108,16 +108,16 @@ values and calculation operands, including supported list values. It does not
 replace table/column/kind/policy/reference fields. Validate the final strict plan;
 do not add these template-only slots to the current untrusted planner contract.
 
-- [ ] Write `test_same_tool_binds_distinct_caller_identity` with callers 1 and 2;
+- [x] Write `test_same_tool_binds_distinct_caller_identity` with callers 1 and 2;
   resulting creator values differ. Write `test_identity_override_and_extra_input_rejected`,
   `test_structure_slots_rejected`, `test_typed_input_bounds`, and
   `test_missing_input_is_not_silently_invented`.
-- [ ] Run `uv run pytest tests/test_tools_binding.py -q`; confirm failure.
-- [ ] Implement immutable contracts and binder. Inputs contain no stored real-user
+- [x] Run `uv run pytest tests/test_tools_binding.py -q`; confirm failure.
+- [x] Implement immutable contracts and binder. Inputs contain no stored real-user
   examples or implicit business assumptions. Slot declarations distinguish
   constants from parameters explicitly.
-- [ ] Run binding tests plus strict model/core regressions; all pass.
-- [ ] Commit `feat: bind typed arguments to reusable backend tools`.
+- [x] Run binding tests plus strict model/core regressions; all pass.
+- [x] Commit `feat: bind typed arguments to reusable backend tools`.
 
 ### Task 3: Versioned registry and controlled publication
 
@@ -132,15 +132,15 @@ Store immutable manifests/digests and active/revoked status in internal PostgreS
 tables. The same app/ID/version with different content conflicts; exact repeat
 publication is idempotent. Publishing never broadens application policy.
 
-- [ ] Write `test_registry_scopes_versions_to_application`,
+- [x] Write `test_registry_scopes_versions_to_application`,
   `test_artifact_overwrite_conflicts`, `test_repeat_publish_is_idempotent`, and
   `test_revocation_survives_concurrent_publish`. Use real PostgreSQL transactions.
-- [ ] Run `uv run pytest tests/test_tools_registry.py -q`; confirm failure.
-- [ ] Implement transactional publish/get/revoke and an additive idempotent
+- [x] Run `uv run pytest tests/test_tools_registry.py -q`; confirm failure.
+- [x] Implement transactional publish/get/revoke and an additive idempotent
   internal-schema upgrade. Enforce app/version keys and digests in storage.
-- [ ] Run registry tests; upgrading a v0.1 database preserves existing audit and
+- [x] Run registry tests; upgrading a v0.1 database preserves existing audit and
   request rows. An unauthorized app lookup returns no artifact.
-- [ ] Commit `feat: store immutable application tool versions`.
+- [x] Commit `feat: store immutable application tool versions`.
 
 ### Task 4: Direct execution endpoint, API contract and audit
 
@@ -181,19 +181,19 @@ attachment so supplied plans never inherit a previous planner's usage. Unknown,
 revoked, incompatible or malformed tools return explicit rejection, with no
 planning fallback unless the caller submits a separate new intent request.
 
-- [ ] Write `test_known_tool_makes_zero_provider_calls` using a spy planner;
+- [x] Write `test_known_tool_makes_zero_provider_calls` using a spy planner;
   `test_two_users_share_definition_not_permissions`; `test_revoked_or_drifted_tool_fails_closed`;
   `test_tool_version_is_in_retry_fingerprint`; and
   `test_concurrent_tool_retry_commits_once`. Assert actual rows and audits.
-- [ ] Run `uv run pytest tests/test_tools_execution.py tests/test_tools_api.py -q`;
+- [x] Run `uv run pytest tests/test_tools_execution.py tests/test_tools_api.py -q`;
   confirm failure.
-- [ ] Implement service/API integration through `Runtime.execute(..., plan=...)`;
+- [x] Implement service/API integration through `Runtime.execute(..., plan=...)`;
   preserve strict static validation, runtime authorization and transactional audit.
   Add internal registry locking/context support without exposing arbitrary plans
   at the public tool endpoint.
-- [ ] Run all new tests and complete PostgreSQL suite. Existing intent endpoint,
+- [x] Run all new tests and complete PostgreSQL suite. Existing intent endpoint,
   dry-run, denied access, rollback and retry behavior remain covered.
-- [ ] Commit `feat: execute approved tools without inference`.
+- [x] Commit `feat: execute approved tools without inference`.
 
 ### Task 5: Usage ledger and measured costs
 
@@ -209,17 +209,17 @@ configured rates are timestamped assumptions, not provider invoices.
 estimated spend and unknown-usage attempts. Direct calls record zero planner
 attempts. Per-request correlation must not expose raw secret-bearing intents.
 
-- [ ] Write `test_billable_attempt_survives_execution_rollback`,
+- [x] Write `test_billable_attempt_survives_execution_rollback`,
   `test_invalid_provider_response_records_attempt`,
   `test_missing_usage_is_unknown`, and `test_supplied_tool_has_no_planner_usage`.
-- [ ] Run `uv run pytest tests/test_usage.py -q`; confirm failure.
-- [ ] Implement independent recording with stale `started` attempts reported as
+- [x] Run `uv run pytest tests/test_usage.py -q`; confirm failure.
+- [x] Implement independent recording with stale `started` attempts reported as
   unknown after interruption. Do not equate parsing failure with zero billing.
   Ledger outages fail new planning closed; already approved no-model tools do
   not depend on provider accounting, but their transaction audit stays mandatory.
-- [ ] Run usage tests; reconcile a scripted provider's declared usage with the
+- [x] Run usage tests; reconcile a scripted provider's declared usage with the
   report. Extend cost calculations with hit fraction and explicit build costs.
-- [ ] Commit `feat: measure inference attempts and reusable tool costs`.
+- [x] Commit `feat: measure inference attempts and reusable tool costs`.
 
 ### Task 6: Publish/import/export CLI and local diagnostics
 
@@ -234,15 +234,15 @@ configured app; explicit publication is the v0.2 manual promotion action.
 internal tables, schema/tool compatibility and credential presence without
 printing secrets or performing paid inference. CLI exit code 1 for blockers.
 
-- [ ] Write `test_doctor_redacts_credentials`, `test_doctor_detects_schema_drift`,
+- [x] Write `test_doctor_redacts_credentials`, `test_doctor_detects_schema_drift`,
   `test_export_import_preserves_digest` and `test_cli_publish_requires_compatible_app`.
-- [ ] Run `uv run pytest tests/test_doctor.py tests/test_tools_cli.py -q`; confirm failure.
-- [ ] Implement diagnostics and lifecycle commands; document current executable
+- [x] Run `uv run pytest tests/test_doctor.py tests/test_tools_cli.py -q`; confirm failure.
+- [x] Implement diagnostics and lifecycle commands; document current executable
   uv setup and the new tool path. Clearly label Docker packaging and generated
   application wrappers as later milestones.
-- [ ] Run installed-wheel CLI smoke tests on Linux and native uv smoke checks
+- [x] Run installed-wheel CLI smoke tests on Linux and native uv smoke checks
   on macOS/Windows in CI. Test manifest export without user rows/credentials.
-- [ ] Commit `feat: manage backend tools and diagnose local setup`.
+- [x] Commit `feat: manage backend tools and diagnose local setup`.
 
 ### Task 7: Repeat-workflow benchmark and release evidence
 
@@ -256,19 +256,19 @@ revisions, request counts, direct/planned counts, usage, build costs if any,
 errors, correctness checks and p50/p95 latency. Tool-only and scripted-provider
 measurements must be distinguished from opt-in paid live-provider measurements.
 
-- [ ] Add acceptance assertions for 1,000 known-tool requests, zero provider
+- [x] Add acceptance assertions for 1,000 known-tool requests, zero provider
   calls, two-user ownership isolation, unchanged data after rejected operations,
   and retries without duplicate effects.
-- [ ] Run acceptance tests before implementing fixtures; confirm missing tools
+- [x] Run acceptance tests before implementing fixtures; confirm missing tools
   or benchmark contract cause failure.
-- [ ] Add explicit typed fixtures and benchmark a deterministic endpoint baseline,
+- [x] Add explicit typed fixtures and benchmark a deterministic endpoint baseline,
   v0.1 planner path, and tool path using identical database/hardware/data. Keep
   live measurement opt-in with an explicit spend limit; do not call a paid model
   1,000 times by default.
-- [ ] Run full PostgreSQL suite, lint, wheel build, installed CLI and acceptance
+- [x] Run full PostgreSQL suite, lint, wheel build, installed CLI and acceptance
   workload. Record actual model usage when available; do not manufacture a
   95% routing result or a conventional-backend cost advantage.
-- [ ] Commit release evidence; stop at v0.2. Use results to write the v0.3
+- [x] Commit release evidence; stop at v0.2. Use results to write the v0.3
   generated-backend/build-worker task plan.
 
 ## Later release planning boundaries

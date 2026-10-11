@@ -1,0 +1,100 @@
+{
+  "format_version": 1,
+  "app": "project_management",
+  "tool_id": "create_task",
+  "version": 1,
+  "description": "Create an owned task after resolving the assignee name",
+  "schema_revision": "493d646a13391e38ae589db1f101f76f9f76d918f4c2376c61a992d93c6d9fab",
+  "policy_revision": "9cb75ece07a0d425c52de0bca7087c9fc917416c87b89f8d5b1fcc4ffc435cff",
+  "runtime_contract": 1,
+  "output_contract": "runtime_result_v1",
+  "inputs": {
+    "title": {
+      "type": "string",
+      "required": true,
+      "nullable": false,
+      "default": null,
+      "max_length": 200,
+      "minimum": null,
+      "maximum": null
+    },
+    "project_id": {
+      "type": "integer",
+      "required": true,
+      "nullable": false,
+      "default": null,
+      "max_length": null,
+      "minimum": 1.0,
+      "maximum": null
+    },
+    "assignee_name": {
+      "type": "string",
+      "required": true,
+      "nullable": false,
+      "default": null,
+      "max_length": 200,
+      "minimum": null,
+      "maximum": null
+    },
+    "due_date": {
+      "type": "string",
+      "required": true,
+      "nullable": false,
+      "default": null,
+      "max_length": 10,
+      "minimum": null,
+      "maximum": null
+    }
+  },
+  "plan": {
+    "version": 1,
+    "operations": [
+      {
+        "id": "assignee",
+        "table": "public.users",
+        "kind": "select",
+        "select": [
+          "id"
+        ],
+        "where": [
+          {
+            "field": "name",
+            "op": "eq",
+            "value": {
+              "argument": "assignee_name"
+            }
+          }
+        ],
+        "limit": 100
+      },
+      {
+        "id": "create",
+        "table": "public.tasks",
+        "kind": "insert",
+        "values": {
+          "title": {
+            "argument": "title"
+          },
+          "project_id": {
+            "argument": "project_id"
+          },
+          "creator_id": {
+            "identity": "user_id"
+          },
+          "assignee_id": {
+            "ref": "assignee",
+            "column": "id"
+          },
+          "due_date": {
+            "argument": "due_date"
+          }
+        },
+        "returning": [
+          "id",
+          "title",
+          "creator_id"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "format_version": 1,
+  "app": "project_management",
+  "tool_id": "list_owned_tasks",
+  "version": 1,
+  "description": "List tasks owned by the authenticated application user",
+  "schema_revision": "493d646a13391e38ae589db1f101f76f9f76d918f4c2376c61a992d93c6d9fab",
+  "policy_revision": "9cb75ece07a0d425c52de0bca7087c9fc917416c87b89f8d5b1fcc4ffc435cff",
+  "runtime_contract": 1,
+  "output_contract": "runtime_result_v1",
+  "inputs": {},
+  "plan": {
+    "version": 1,
+    "operations": [
+      {
+        "id": "owned",
+        "table": "public.tasks",
+        "kind": "select",
+        "select": [
+          "id",
+          "title",
+          "creator_id"
+        ],
+        "where": [
+          {
+            "field": "creator_id",
+            "op": "eq",
+            "value": {
+              "identity": "user_id"
+            }
+          }
+        ],
+        "limit": 100
+      }
+    ]
+  }
+}

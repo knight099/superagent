@@ -10,10 +10,17 @@ and lets your client submit requests such as “Create a task for Rahul” or
 checks permissions and invariants, generates parameterized SQL, and executes
 allowed operations in one transaction.
 
+**v0.2 adds application-wide reusable backend tools.** An agent can draft a
+typed tool and propose application schema changes. Evaluate the draft on a
+disposable database, review it, then publish an immutable version. Frontends or
+agents call that tool repeatedly without another model call. All users share
+the application's schema and tool definitions; identity and row permissions
+are checked afresh on each execution.
+
 You can add supported CRUD workflows without a new controller, service,
 repository, endpoint, or tool function for each one. You still own your schema,
 access rules, identity provider, hosting, and any business logic outside the
-supported plan language. v0.1 is an experimental runtime.
+supported plan language. v0.2 is an experimental runtime.
 
 **Database + Policies + Agent = Backend**
 
@@ -156,7 +163,7 @@ planner:
   timeout_seconds: 30
 ```
 
-Then set `YOUR_AI_API_KEY` in the environment. v0.1 supports providers that accept
+Then set `YOUR_AI_API_KEY` in the environment. v0.2 supports providers that accept
 OpenAI-compatible Chat Completions, `response_format: json_schema`, and
 `max_completion_tokens`. This does not mean every AI API/model is compatible.
 A locally hosted compatible provider can avoid per-token API billing, but you
@@ -166,6 +173,102 @@ The model receives allowed schema metadata, rules, user ID, and intent. It does
 not receive a database connection or rows by default. Every returned plan goes
 through strict parsing and deterministic validation. Live model quality and
 latency depend on your chosen provider; bring your key to evaluate them.
+
+## Let the agent build reusable backend tools
+
+Tool definitions belong to **one application**, not one user. Schemas describe
+the whole application backend. A tool such as `create_task` binds authenticated
+ownership on each invocation and can be reused by other authorized users.
+v0.2 creates declarative tool artifacts; generated Python service packages and
+subagent build fan-out are later milestones.
+
+Start with the project-management sample below, or supply your own input contract
+and evaluation cases. To draft a tool using your AI API:
+
+```sh
+superagent tools draft --id create_task --version 1 \
+  --intent 'Create an owned task after resolving an assignee by name' \
+  --inputs examples/project_management/tools/create_task.inputs.json \
+  --output create_task.draft.json
+```
+
+Review the file. The agent cannot publish it, modify permissions, execute SQL,
+or change the database schema. Prepare a **separate disposable evaluation
+database** with the same application schema and test fixtures. For the sample:
+
+```sh
+docker compose exec -T postgres createdb -U superagent superagent_eval
+docker compose exec -T postgres psql -U superagent -d superagent_eval \
+  < examples/project_management/schema.sql
+export EVAL_DATABASE_URL='postgresql://superagent:superagent_dev@localhost:5432/superagent_eval'
+```
+
+The repository includes revision-bound sample tools to try without an AI key.
+Evaluate and explicitly publish one:
+
+```sh
+superagent tools evaluate \
+  --file examples/project_management/tools/create_task.json \
+  --cases examples/project_management/tools/create_task.cases.json \
+  --output create_task.eval.json
+superagent tools publish \
+  --file examples/project_management/tools/create_task.json \
+  --evaluation create_task.eval.json
+superagent run --tools-only
+```
+
+To evaluate an agent-generated draft, substitute `create_task.draft.json` in both
+commands and review/update the cases for its declared result projections.
+Eval cases must assert successful behavior and an authorization guard. They run
+in rollback transactions; use disposable data because sequences can advance
+and trusted triggers can have effects outside a transaction. The CLI refuses
+the configured application database. Reports are owner-reviewed evidence,
+not signed independent attestations.
+
+Call the published backend tool directly:
+
+```sh
+curl http://127.0.0.1:8000/v1/tools/create_task/execute \
+  -H 'Content-Type: application/json' \
+  -H 'X-User-ID: 1' \
+  -H 'Idempotency-Key: create-task-001' \
+  -d '{"version":1,"arguments":{"title":"Ship the MVP","project_id":1,"assignee_name":"Rahul","due_date":"2099-01-01"}}'
+```
+
+This makes **zero AI calls**. New natural-language requests to `/v1/execute`
+still use the planner; v0.2 does not automatically route similar wording to a
+cached tool. Clients and other agents can call the known tool endpoint.
+List/export/revoke versions using `superagent tools --help`. Changed schema
+or policies require a compatible newly evaluated tool version.
+
+For application-wide schema evolution and operator visibility:
+
+```sh
+superagent schema-propose --intent 'Add optional notes to application tasks' \
+  --output schema-proposal.json
+superagent doctor
+superagent observe --start 2026-10-01 --end 2026-11-01
+```
+
+Schema proposals are structured, revision-bound suggestions. v0.2 never applies
+DDL automatically or creates a schema for each user. The owner reviews and
+implements migrations, updates allowlists/rules, and evaluates affected tools.
+Observability includes app-scoped outcomes, p50/p95 runtime duration, tool
+versions, agent attempt counts by purpose, token usage and unknown costs.
+Structured `superagent.events` logs correlate execution audit IDs and planning
+attempt IDs. Logs and aggregate reports exclude identities, raw intents and
+row values; durable audit has the retention/privacy requirements below.
+
+Default guardrails include a **100-call/day per-app model budget**, bounded
+provider context/response bytes, a 64 KiB HTTP body limit, denied initial
+permissions, immutable tool versions, explicit evaluation/publication and
+revocation. Configure `planner.max_calls_per_day`, `max_prompt_bytes`,
+`max_response_bytes` and `max_completion_tokens` as the owner. The call cap is
+not a guaranteed dollar cap. Exhausting it leaves approved no-model tools
+available. Tool definitions are reused; private results and authorization
+decisions are not cached. Production identity/gateway requirements still apply.
+
+See [v0.2 verification and benchmark boundaries](docs/reusable-tools-verification.md).
 
 ## Try it without an AI key
 
@@ -239,8 +342,16 @@ The potential saving is developer time on supported workflows. For an explicitly
 hypothetical example, saving one maintenance hour/month valued at $50 could
 outweigh $24 of extra AI cost at 10,000 requests; we have not measured that saving.
 At higher volume, deterministic endpoints/templates are often cheaper.
-Identical committed retries and supplied CLI plans skip the model; v0.1 has no
-semantic plan cache for different-but-equivalent new requests.
+Identical committed retries, supplied CLI plans and direct approved-tool calls
+skip the model. v0.2 has no semantic plan cache for different-but-equivalent
+new natural-language requests.
+
+At 100,000 requests, if 95% are explicit tool calls and 5% need the assumed
+planner call, inference falls from $240 to **$12/month**, plus generation/eval
+costs. This is a workload assumption, not a measured routing rate. With $5 of
+assumed builds and the same $21.15 infrastructure, total is $38.15. Equal
+infrastructure plus positive model/build costs still exceeds the conventional
+backend's infrastructure bill; measure development savings separately.
 
 Read the [full cost analysis and editable calculator](docs/cost-comparison.md),
 including token-size sensitivity, development effort, and break-even assumptions.
@@ -255,7 +366,7 @@ including token-size sensitivity, development effort, and break-even assumptions
 - **Database:** configure a limited runtime role with necessary application DML
   and internal-table access. `init-db` needs schema creation privileges. Do not
   run the service as database owner/superuser. Constraints/RLS can add defenses;
-  v0.1 does not provision RLS or JWT/OIDC automatically.
+  v0.2 does not provision RLS or JWT/OIDC automatically.
 - **Scope:** PostgreSQL only; explicit scalar columns and small sequential
   workflows. No joins, subqueries, aggregate/cross-table invariants, loops,
   arbitrary SQL, shell execution, payments, or distributed workflows. This is a
@@ -265,7 +376,7 @@ including token-size sensitivity, development effort, and break-even assumptions
   instead of being silently truncated.
 - **Audit:** required audit failure rolls back changes. Named sensitive fields
   can be redacted, but original free-text intent is retained. Manage audit
-  access/retention. v0.1 provides rollback and replay protection, not universal undo.
+  access/retention. v0.2 provides rollback and replay protection, not universal undo.
 
 ## Development
 
