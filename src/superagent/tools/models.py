@@ -141,3 +141,9 @@ class ToolExecutionContext(StrictModel):
     digest: Revision
     schema_revision: Revision
     policy_revision: Revision
+
+
+class ToolInvocation(StrictModel):
+    tool_id: Name
+    version: int = Field(ge=1)
+    arguments: dict[Name, Scalar] = Field(default_factory=dict, max_length=100)

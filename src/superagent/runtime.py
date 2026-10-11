@@ -1,5 +1,4 @@
 """Application-independent intent coordination, dry-run, audit, and replay."""
-import hashlib
 import json
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -12,6 +11,8 @@ from .executor import Executor
 from .policy import policy_sql
 from .validation import validate, Rejection
 from .audit import write_audit, redact, json_safe
+from .schema import introspect
+from .revisions import schema_revision, policy_revision, digest
 
 
 class Runtime:
@@ -29,8 +30,8 @@ class Runtime:
         return TransitionPlan.model_validate(output.model_dump() if isinstance(
             output, TransitionPlan) else output)
 
-    def explain(self, plan, identity):
-        validate(plan, self.catalog, self.config)
+    def explain(self, plan, identity, *, catalog=None):
+        validate(plan, catalog or self.catalog, self.config)
         statements = []
         for op in plan.operations:
             statement = compile_operation(op).explain()
@@ -50,11 +51,12 @@ class Runtime:
                 'notice':'No plan statements executed. Row authorization, references, constraints '
                          'and invariants require execution-time checks.'}
 
-    def execute(self, intent, identity, key=None, *, dry_run=False, plan=None):
+    def execute(self, intent, identity, key=None, *, dry_run=False, plan=None,
+                tool_request=None, registry=None):
         audit_id = str(uuid4())
         proposed = None
         started = datetime.now(timezone.utc).isoformat()
-        record = {'audit_id':audit_id, 'identity':identity, 'intent':intent,
+        record = {'audit_id':audit_id, 'app':self.config.app, 'identity':identity, 'intent':intent,
                   'started_at':started, 'dry_run':dry_run}
         try:
             if not isinstance(intent, str) or not intent.strip() or len(intent) > 8000:
@@ -68,13 +70,36 @@ class Runtime:
             if key is not None and (not isinstance(key,str) or not 1 <= len(key) <= 128):
                 raise Rejection('idempotency key must contain 1..128 characters')
             supplied = plan.model_dump() if isinstance(plan, TransitionPlan) else plan
-            fingerprint = hashlib.sha256(json.dumps({'intent':intent, 'identity':identity,
-                'plan':supplied}, sort_keys=True, separators=(',',':'), allow_nan=False).encode()).hexdigest()
+            request_data = {'intent':intent, 'identity':identity, 'plan':supplied}
+            if tool_request is not None:
+                from .tools.models import ToolInvocation
+                if plan is not None:
+                    raise Rejection('tool requests cannot supply a separate plan')
+                invocation = ToolInvocation.model_validate(tool_request)
+                request_data['tool_request'] = invocation.model_dump()
+                record['tool'] = {'tool_id':invocation.tool_id,'version':invocation.version}
             scope = json.dumps(identity['user_id'], sort_keys=True)
+            catalog = self.catalog
             with psycopg.connect(self.database_url, autocommit=True) as conn:
                 with conn.transaction():
                     conn.execute("SELECT set_config('statement_timeout', %s, true)",
                                  (str(self.config.limits.statement_timeout_ms),))
+                    if tool_request is not None:
+                        from .tools.registry import ToolRegistry, artifact_digest
+                        from .tools.binding import bind
+                        source = registry or ToolRegistry(self.database_url)
+                        tool = source.load_for_execution(conn,self.config.app,
+                                                         invocation.tool_id,invocation.version)
+                        content = artifact_digest(tool)
+                        record['tool'].update({'digest':content,'schema_revision':tool.schema_revision,
+                                              'policy_revision':tool.policy_revision})
+                        catalog = introspect(conn,self.config)
+                        if (tool.schema_revision != schema_revision(catalog,self.config)
+                                or tool.policy_revision != policy_revision(self.config)):
+                            raise Rejection('tool schema or policy revision is incompatible; rebuild required')
+                        plan = bind(tool,invocation.arguments,identity)
+                        request_data['tool'] = record['tool']
+                    fingerprint = digest(request_data)
                     if key is not None and not dry_run:
                         conn.execute('''INSERT INTO superagent_internal.requests
                             (app, identity, key, fingerprint) VALUES (%s,%s,%s,%s)
@@ -88,16 +113,16 @@ class Runtime:
                             return existing[1]
                     proposed = self._plan(intent, identity, plan)
                     record['plan'] = proposed.model_dump()
-                    if self.planner is not None:
+                    if self.planner is not None and plan is None:
                         record['planner_usage'] = getattr(self.planner, 'usage', {})
-                    validate(proposed, self.catalog, self.config)
+                    validate(proposed, catalog, self.config)
                     if dry_run:
-                        result = self.explain(proposed, identity)
+                        result = self.explain(proposed, identity, catalog=catalog)
                         result['audit_id'] = audit_id
                     else:
                         if key is None and any(o.kind != 'select' for o in proposed.operations):
                             raise Rejection('mutations require an idempotency key')
-                        changes = Executor(self.config, self.catalog).execute(conn, proposed, identity)
+                        changes = Executor(self.config, catalog).execute(conn, proposed, identity)
                         result = {'status':'committed', 'summary':'Validated transition completed',
                                   'changes':redact([{k:v for k,v in change.items() if k != 'effects'}
                                                     for change in changes], self.config), 'audit_id':audit_id}
