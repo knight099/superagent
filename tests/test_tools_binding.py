@@ -46,7 +46,8 @@ def test_undeclared_slot_rejected():
     from superagent.tools.models import ToolManifest
     data=manifest_data()
     data['inputs']={}
-    with pytest.raises(ValueError): ToolManifest.model_validate(data)
+    with pytest.raises(ValueError):
+        ToolManifest.model_validate(data)
 
 
 def test_defaults_and_numeric_constraints():
@@ -58,7 +59,8 @@ def test_defaults_and_numeric_constraints():
     tool=ToolManifest.model_validate(data)
     assert bind(tool,{'title':'task'},{'user_id':1}).operations[0].values['project_id']==1
     for value in (True,0,4,1.5,None):
-        with pytest.raises(ValueError): bind(tool,{'title':'task','project':value},{'user_id':1})
+        with pytest.raises(ValueError):
+            bind(tool,{'title':'task','project':value},{'user_id':1})
 
 
 def test_predicate_list_and_calculation_slots_preserve_reference_structure():

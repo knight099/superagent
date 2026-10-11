@@ -23,6 +23,18 @@ def initialize_internal(conn):
                 response jsonb,
                 created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
                 PRIMARY KEY (app, identity, key)
+            );
+            CREATE TABLE IF NOT EXISTS superagent_internal.tools (
+                app text NOT NULL,
+                tool_id text NOT NULL,
+                version integer NOT NULL CHECK (version > 0),
+                digest text NOT NULL,
+                manifest jsonb NOT NULL,
+                status text NOT NULL CHECK (status IN ('active','revoked')),
+                created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+                revoked_at timestamptz,
+                reason text,
+                PRIMARY KEY (app,tool_id,version)
             )''')
 
 

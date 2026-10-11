@@ -121,9 +121,11 @@ class ToolManifest(StrictModel):
             if isinstance(value,dict):
                 if set(value)=={'argument'}:
                     used.add(value['argument'])
-                for child in value.values(): walk(child)
+                for child in value.values():
+                    walk(child)
             elif isinstance(value,list):
-                for child in value: walk(child)
+                for child in value:
+                    walk(child)
         walk(self.plan.model_dump())
         if used != set(self.inputs):
             raise ValueError('declared inputs must match argument slots')
