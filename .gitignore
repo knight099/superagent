@@ -9,3 +9,5 @@ dist/
 build/
 .superpowers/
 .env
+.superagent/
+superagent.yaml

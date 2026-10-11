@@ -6,21 +6,28 @@ import os
 from pathlib import Path
 import sys
 import psycopg
+import yaml
 from .config import load_config, parse_user_id
 from .schema import introspect
 from .models import TransitionPlan
 from .runtime import Runtime
 from .audit import initialize_internal
+from .setup import discover_config, save_schema
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='superagent')
     sub = parser.add_subparsers(dest='command',required=True)
-    init = sub.add_parser('init',help='Write the editable project-management config')
+    init = sub.add_parser('init',help='Generate config from your database or the sample app')
     init.add_argument('--config',default='superagent.yaml')
-    for name in ('init-db','explain','execute','run'):
+    init.add_argument('--from-db',action='store_true',help='Discover tables in your PostgreSQL schema')
+    init.add_argument('--schema',default='public')
+    init.add_argument('--schema-file',default='.superagent/schema.json')
+    for name in ('init-db','schema','explain','execute','run'):
         cmd = sub.add_parser(name)
         cmd.add_argument('--config',default='superagent.yaml')
+        if name in ('schema','run'):
+            cmd.add_argument('--schema-file',default='.superagent/schema.json')
         if name in ('explain','execute'):
             cmd.add_argument('--user-id',required=True)
             cmd.add_argument('--plan')
@@ -32,11 +39,40 @@ def main(argv=None):
             cmd.add_argument('--port',type=int,default=8000)
     args = parser.parse_args(argv)
     try:
+        if hasattr(args,'schema_file') and (args.command != 'init' or args.from_db):
+            config_path = Path(args.config).resolve()
+            schema_path = Path(args.schema_file).resolve()
+            if config_path == schema_path or (
+                    config_path.exists() and schema_path.exists()
+                    and config_path.samefile(schema_path)):
+                raise ValueError('Config and schema snapshot require separate files')
         if args.command == 'init':
-            data = files('superagent').joinpath('templates/project_management.yaml').read_text()
-            with Path(args.config).open('x') as handle:
-                handle.write(data)
-            print(f'Created {args.config}. Configure table allowlists, policies, and DATABASE_URL.')
+            if Path(args.config).exists():
+                raise FileExistsError(args.config)
+            if args.from_db:
+                url = os.environ.get('DATABASE_URL')
+                if not url:
+                    raise ValueError('DATABASE_URL is required')
+                with psycopg.connect(url,autocommit=True) as conn:
+                    cfg = discover_config(conn,args.schema)
+                    catalog = introspect(conn,cfg)
+                data = yaml.safe_dump(cfg.model_dump(),sort_keys=False)
+            else:
+                data = files('superagent').joinpath('templates/project_management.yaml').read_text()
+            created = False
+            try:
+                with Path(args.config).open('x') as handle:
+                    created = True
+                    handle.write(data)
+                if args.from_db:
+                    save_schema(catalog,cfg,args.schema_file)
+            except Exception:
+                if created:
+                    Path(args.config).unlink(missing_ok=True)
+                raise
+            print(f'Created {args.config}. Configure table allowlists, permissions, and DATABASE_URL.')
+            if args.from_db:
+                print(f'Saved schema to {args.schema_file}. All permissions start denied.')
             return 0
         cfg = load_config(args.config)
         url = os.environ.get(cfg.database.url_env)
@@ -48,6 +84,11 @@ def main(argv=None):
                 print('Initialized internal audit and idempotency tables.')
                 return 0
             catalog = introspect(conn,cfg)
+        if args.command in ('schema','run'):
+            save_schema(catalog,cfg,args.schema_file)
+            if args.command == 'schema':
+                print(f'Saved allowed PostgreSQL metadata to {args.schema_file}.')
+                return 0
         if args.command == 'run' or not getattr(args,'plan',None):
             from .planner import OpenAIPlanner
             planner = OpenAIPlanner(cfg.planner)

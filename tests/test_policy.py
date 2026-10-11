@@ -92,3 +92,10 @@ def test_insert_permission_checks_server_defaults(db, cfg, cat):
     with pytest.raises(Rejection):
         Executor(cfg,cat).execute(db,p,{'user_id':1})
     assert db.execute("SELECT count(*) FROM tasks WHERE title='new'").fetchone()[0] == 0
+
+
+def test_uuid_database_identity_matches_canonical_string():
+    from uuid import UUID
+    user_id='12345678-1234-5678-1234-567812345678'
+    assert evaluate(expr(),{'row':{'creator_id':UUID(user_id)},
+                            'identity':{'user_id':user_id}}) is True

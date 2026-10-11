@@ -19,7 +19,7 @@ superagent = "superagent.cli:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", ".deps"]
+pythonpath = ["src", ".deps", "."]
 testpaths = ["tests"]
 
 [tool.ruff]

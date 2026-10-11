@@ -1,6 +1,7 @@
 """Generic three-valued row/identity policy AST, shared by SQL and postconditions."""
 import operator
 from datetime import date, datetime
+from uuid import UUID
 from psycopg import sql
 from .compiler import Statement, OPERATORS
 from .models import Operand
@@ -38,6 +39,10 @@ def evaluate(expr, context):
     if left is None or right is None:
         return None
     try:
+        if isinstance(left, UUID) and isinstance(right, str):
+            right = UUID(right)
+        if isinstance(right, UUID) and isinstance(left, str):
+            left = UUID(left)
         if isinstance(left, (date, datetime)) and isinstance(right, str):
             right = type(left).fromisoformat(right)
         if isinstance(right, (date, datetime)) and isinstance(left, str):

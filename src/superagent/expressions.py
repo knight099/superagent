@@ -1,6 +1,7 @@
 """Closed scalar calculations and references; never evaluate source code."""
 from datetime import date, datetime, timedelta
 import math
+from decimal import Decimal
 from .models import Reference, Calculation
 from .validation import Rejection
 
@@ -24,10 +25,13 @@ def resolve_value(value, results):
             if not isinstance(left, (date, datetime)):
                 raise Rejection('date calculation requires a date')
             return left + timedelta(days=right)
-        if type(left) not in (int, float) or type(right) not in (int, float):
+        if type(left) not in (int, float, Decimal) or type(right) not in (int, float, Decimal):
             raise Rejection('addition requires numbers')
+        if isinstance(left, Decimal) or isinstance(right, Decimal):
+            left, right = Decimal(str(left)), Decimal(str(right))
         total = left + right
-        if not math.isfinite(total) or abs(total) > 10**12:
+        finite = total.is_finite() if isinstance(total, Decimal) else math.isfinite(total)
+        if not finite or abs(total) > 10**12:
             raise Rejection('calculation magnitude exceeds limit')
         return total
     return value
