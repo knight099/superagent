@@ -79,9 +79,9 @@ class OpenAIPlanner:
                 if len(response.content) > 131072:
                     raise PlannerError('provider response exceeds size limit')
                 body = response.json()
+                self._usage.set(body.get('usage',{}))
                 content = body['choices'][0]['message']['content']
                 plan = TransitionPlan.model_validate_json(content)
-                self._usage.set(body.get('usage',{}))
                 return plan
             except httpx.HTTPError as exc:
                 raise PlannerError('provider request failed') from exc

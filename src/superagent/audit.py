@@ -35,6 +35,19 @@ def initialize_internal(conn):
                 revoked_at timestamptz,
                 reason text,
                 PRIMARY KEY (app,tool_id,version)
+            );
+            CREATE TABLE IF NOT EXISTS superagent_internal.model_attempts (
+                id uuid PRIMARY KEY,
+                app text NOT NULL,
+                purpose text NOT NULL,
+                provider text NOT NULL,
+                model text NOT NULL,
+                status text NOT NULL CHECK (status IN ('started','succeeded','failed','unknown')),
+                usage jsonb,
+                rates jsonb,
+                estimated_usd numeric,
+                created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+                finished_at timestamptz
             )''')
 
 

@@ -2,6 +2,7 @@
 import json
 from datetime import datetime, timezone
 from uuid import uuid4
+from urllib.parse import urlsplit
 import psycopg
 from psycopg.types.json import Jsonb
 from pydantic import ValidationError
@@ -26,9 +27,20 @@ class Runtime:
             return TransitionPlan.model_validate(data)
         if self.planner is None:
             raise Rejection('no planner configured')
-        output = self.planner.plan(intent, self.catalog, self.config, identity)
-        return TransitionPlan.model_validate(output.model_dump() if isinstance(
-            output, TransitionPlan) else output)
+        from .usage import UsageLedger
+        ledger = UsageLedger(self.database_url)
+        provider_config = getattr(self.planner,'config',self.config.planner)
+        attempt = ledger.begin(self.config.app,'intent_plan',
+            urlsplit(provider_config.url).hostname or 'custom',provider_config.model)
+        try:
+            output = self.planner.plan(intent, self.catalog, self.config, identity)
+            result = TransitionPlan.model_validate(output.model_dump() if isinstance(
+                output, TransitionPlan) else output)
+        except Exception:
+            ledger.finish(attempt,'failed',getattr(self.planner,'usage',None),None)
+            raise
+        ledger.finish(attempt,'succeeded',getattr(self.planner,'usage',None),None)
+        return result
 
     def explain(self, plan, identity, *, catalog=None):
         validate(plan, catalog or self.catalog, self.config)
