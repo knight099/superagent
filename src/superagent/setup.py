@@ -7,6 +7,7 @@ import os
 from dataclasses import asdict
 from psycopg.rows import dict_row
 from .config import Config
+from .revisions import schema_revision, policy_revision
 
 
 RESERVED_SCHEMAS = {'superagent_internal', 'pg_catalog', 'information_schema'}
@@ -38,6 +39,8 @@ def save_schema(catalog, config, path):
             'primary_key':[k for k in table.primary_key if k in allowed],
             'constraints':table.constraints}
     data = {'format_version':1, 'app':config.app,
+            'schema_revision':schema_revision(catalog,config),
+            'policy_revision':policy_revision(config),
             'captured_at':datetime.now(timezone.utc).isoformat(), 'catalog':{'tables':tables}}
     destination = Path(path)
     destination.parent.mkdir(parents=True,exist_ok=True)
