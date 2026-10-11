@@ -1,3 +1,4 @@
+import json
 from superagent.cli import main
 from superagent.audit import initialize_internal
 from test_tools_execution import configured
@@ -17,7 +18,12 @@ def test_export_import_preserves_digest(db,db_url,tmp_path,monkeypatch):
     exported=ToolManifest.model_validate_json(destination.read_text())
     assert artifact_digest(exported)==artifact_digest(tool)
     assert 'superagent_test' not in destination.read_text()
-    assert main(['tools','publish','--config',str(config),'--file',str(destination)])==0
+    from superagent.evaluations import evaluate
+    from test_evaluations import cases
+    report=tmp_path/'eval.json'
+    report.write_text(json.dumps(evaluate(tool,cases(),service.runtime.config,db_url)))
+    assert main(['tools','publish','--config',str(config),'--file',str(destination),
+                 '--evaluation',str(report)])==0
     assert main(['tools','revoke','--config',str(config),'--id',tool.tool_id,
                  '--version','1','--reason','testing'])==0
     assert registry.list(tool.app)[0]['status']=='revoked'
@@ -34,5 +40,9 @@ def test_cli_publish_requires_compatible_app(db,db_url,tmp_path,monkeypatch):
     manifest=tmp_path/'tool.json'
     manifest.write_text(tool('other').model_dump_json())
     monkeypatch.setenv('DATABASE_URL',db_url)
-    assert main(['tools','publish','--config',str(config),'--file',str(manifest)])==1
+    report=tmp_path/'eval.json'
+    from test_tools_registry import evidence
+    report.write_text(json.dumps(evidence(tool('other'))))
+    assert main(['tools','publish','--config',str(config),'--file',str(manifest),
+                 '--evaluation',str(report)])==1
     assert db.execute('SELECT count(*) FROM superagent_internal.tools').fetchone()[0]==0

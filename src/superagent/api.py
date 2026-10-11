@@ -5,6 +5,7 @@ from pydantic import Field
 from .models import StrictModel, Name, Scalar
 from .config import parse_user_id
 from .tools.service import ToolService
+from .guardrails import BodyLimit
 
 
 class ExecuteRequest(StrictModel):
@@ -20,6 +21,7 @@ class ToolExecuteRequest(StrictModel):
 
 def create_app(runtime):
     app = FastAPI(title='Superagent', version='0.1.0')
+    app.add_middleware(BodyLimit)
     tools = ToolService(runtime)
 
     def identity(x_user_id):

@@ -34,6 +34,7 @@ def initialize_internal(conn):
                 created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
                 revoked_at timestamptz,
                 reason text,
+                evaluation jsonb,
                 PRIMARY KEY (app,tool_id,version)
             );
             CREATE TABLE IF NOT EXISTS superagent_internal.model_attempts (
@@ -48,7 +49,8 @@ def initialize_internal(conn):
                 estimated_usd numeric,
                 created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
                 finished_at timestamptz
-            )''')
+            );
+            ALTER TABLE superagent_internal.tools ADD COLUMN IF NOT EXISTS evaluation jsonb''')
 
 
 def redact(value, config):

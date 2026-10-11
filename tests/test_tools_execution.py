@@ -18,7 +18,9 @@ def configured(db,db_url,planner=None):
     tool=ToolManifest.model_validate(data)
     initialize_internal(db)
     registry=ToolRegistry(db_url)
-    registry.publish(tool)
+    from superagent.evaluations import evaluate
+    from test_evaluations import cases
+    registry.publish(tool,evaluation=evaluate(tool,cases(),cfg,db_url))
     rt=Runtime(db_url,cfg,cat,planner)
     return ToolService(rt,registry),registry,tool
 
@@ -73,7 +75,10 @@ def test_policy_drift_blocks_cached_tools(db,db_url):
 
 def test_tool_version_is_in_retry_fingerprint(db,db_url):
     service,registry,tool=configured(db,db_url)
-    registry.publish(tool.model_copy(update={'version':2}))
+    from superagent.evaluations import evaluate
+    from test_evaluations import cases
+    next_tool=tool.model_copy(update={'version':2})
+    registry.publish(next_tool,evaluation=evaluate(next_tool,cases(),service.runtime.config,db_url))
     assert service.execute(tool.tool_id,1,{'title':'a'},{'user_id':1},'same')['status']=='committed'
     result=service.execute(tool.tool_id,2,{'title':'a'},{'user_id':1},'same')
     assert result['status']=='rejected'

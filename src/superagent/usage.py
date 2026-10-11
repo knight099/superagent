@@ -4,15 +4,27 @@ from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from .validation import Rejection
 
 
 class UsageLedger:
     def __init__(self,database_url):
         self.database_url=database_url
 
-    def begin(self,app,purpose,provider,model):
+    def begin(self,app,purpose,provider,model,*,limit=None):
         attempt=str(uuid4())
         with psycopg.connect(self.database_url) as conn:
+            if limit is not None:
+                if type(limit) is not int or limit < 0:
+                    raise ValueError('invalid model-call budget')
+                conn.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',
+                             (f'superagent:model-budget:{app}',))
+                count=conn.execute('''SELECT count(*) FROM superagent_internal.model_attempts
+                    WHERE app=%s AND created_at >=
+                    date_trunc('day',clock_timestamp() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' ''',
+                    (app,)).fetchone()[0]
+                if count>=limit:
+                    raise Rejection('daily model-call budget exhausted; approved tools remain available')
             conn.execute('''INSERT INTO superagent_internal.model_attempts
                 (id,app,purpose,provider,model,status) VALUES (%s,%s,%s,%s,%s,'started')''',
                 (attempt,app,purpose,provider,model))
@@ -57,6 +69,15 @@ class UsageLedger:
                 FROM superagent_internal.model_attempts
                 WHERE app=%s AND created_at >= %s::timestamptz AND created_at < %s::timestamptz''',
                 (app,start,end)).fetchone()
+            by_purpose=conn.execute('''SELECT purpose,count(*) AS attempts,
+                count(*) FILTER (WHERE status='failed') AS failed
+                FROM superagent_internal.model_attempts
+                WHERE app=%s AND created_at >= %s::timestamptz AND created_at < %s::timestamptz
+                GROUP BY purpose ORDER BY purpose''',(app,start,end)).fetchall()
         row['estimated_usd']=float(row['estimated_usd']) if row['estimated_usd'] is not None else (
             0.0 if row['attempts']==0 else None)
+        for key in ('attempts','failed','unknown_usage_attempts','unpriced_attempts',
+                    'prompt_tokens','completion_tokens'):
+            row[key]=int(row[key])
+        row['by_purpose']=by_purpose
         return row

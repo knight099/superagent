@@ -25,11 +25,23 @@ def main(argv=None):
     init.add_argument('--schema-file',default='.superagent/schema.json')
     tool_cmd = sub.add_parser('tools',help='Manage application-wide approved backend tools')
     tool_sub = tool_cmd.add_subparsers(dest='tool_command',required=True)
-    for name in ('publish','list','revoke','export'):
+    for name in ('publish','list','revoke','export','draft','evaluate'):
         cmd = tool_sub.add_parser(name)
         cmd.add_argument('--config',default='superagent.yaml')
         if name == 'publish':
             cmd.add_argument('--file',required=True)
+            cmd.add_argument('--evaluation',required=True)
+        if name in ('draft','evaluate'):
+            cmd.add_argument('--output',required=True)
+        if name == 'draft':
+            cmd.add_argument('--intent',required=True)
+            cmd.add_argument('--id',required=True)
+            cmd.add_argument('--version',type=int,required=True)
+            cmd.add_argument('--inputs',required=True)
+        if name == 'evaluate':
+            cmd.add_argument('--file',required=True)
+            cmd.add_argument('--cases',required=True)
+            cmd.add_argument('--database-env',default='EVAL_DATABASE_URL')
         if name in ('revoke','export'):
             cmd.add_argument('--id',required=True)
             cmd.add_argument('--version',type=int,required=True)
@@ -37,9 +49,15 @@ def main(argv=None):
             cmd.add_argument('--reason',required=True)
         if name == 'export':
             cmd.add_argument('--output',required=True)
-    for name in ('init-db','schema','doctor','explain','execute','run'):
+    for name in ('init-db','schema','schema-propose','doctor','observe','explain','execute','run'):
         cmd = sub.add_parser(name)
         cmd.add_argument('--config',default='superagent.yaml')
+        if name == 'schema-propose':
+            cmd.add_argument('--intent',required=True)
+            cmd.add_argument('--output',required=True)
+        if name == 'observe':
+            cmd.add_argument('--start',default='2000-01-01')
+            cmd.add_argument('--end',default='2100-01-01')
         if name in ('schema','run'):
             cmd.add_argument('--schema-file',default='.superagent/schema.json')
         if name in ('explain','execute'):
@@ -98,6 +116,18 @@ def main(argv=None):
             report = doctor(cfg,url)
             print(json.dumps(report,indent=2,default=str))
             return 0 if report['ready'] else 1
+        if args.command == 'observe':
+            from .observability import report
+            print(json.dumps(report(cfg.app,url,args.start,args.end),indent=2))
+            return 0
+        if args.command == 'schema-propose':
+            from .agents import ApplicationAgent
+            from .planner import OpenAIPlanner
+            proposal = ApplicationAgent(cfg,url,OpenAIPlanner(cfg.planner)).propose_schema(args.intent)
+            with Path(args.output).open('x') as handle:
+                handle.write(proposal.model_dump_json(indent=2)+'\n')
+            print('Saved application schema proposal for owner review; no DDL executed.')
+            return 0
         if args.command == 'tools':
             from .tools.registry import ToolRegistry
             from .tools.models import ToolManifest
@@ -110,7 +140,8 @@ def main(argv=None):
                 if (tool.app != cfg.app or tool.schema_revision != schema_revision(catalog,cfg)
                         or tool.policy_revision != policy_revision(cfg)):
                     raise ValueError('tool application or revisions are incompatible')
-                print(json.dumps({'digest':registry.publish(tool),'status':'published'}))
+                evidence = json.loads(Path(args.evaluation).read_text())
+                print(json.dumps({'digest':registry.publish(tool,evaluation=evidence),'status':'published'}))
             elif args.tool_command == 'list':
                 print(json.dumps(registry.list(cfg.app),indent=2,default=str))
             elif args.tool_command == 'revoke':
@@ -121,6 +152,27 @@ def main(argv=None):
                 with Path(args.output).open('x') as handle:
                     handle.write(tool.model_dump_json(indent=2)+'\n')
                 print(f'Exported {args.output}.')
+            elif args.tool_command == 'draft':
+                from .agents import ApplicationAgent
+                from .planner import OpenAIPlanner
+                inputs = json.loads(Path(args.inputs).read_text())
+                tool = ApplicationAgent(cfg,url,OpenAIPlanner(cfg.planner)).draft_tool(
+                    args.intent,args.id,args.version,inputs)
+                with Path(args.output).open('x') as handle:
+                    handle.write(tool.model_dump_json(indent=2)+'\n')
+                print('Saved backend tool draft; evaluate and explicitly publish before use.')
+            elif args.tool_command == 'evaluate':
+                from .evaluations import evaluate
+                eval_url = os.environ.get(args.database_env)
+                if not eval_url:
+                    raise ValueError('a dedicated evaluation database is required')
+                tool = ToolManifest.model_validate_json(Path(args.file).read_text())
+                evidence = evaluate(tool,json.loads(Path(args.cases).read_text()),cfg,eval_url,
+                                    production_url=url)
+                with Path(args.output).open('x') as handle:
+                    handle.write(json.dumps(evidence,indent=2)+'\n')
+                print(json.dumps({'passed':evidence['passed'],'case_count':evidence['case_count']}))
+                return 0 if evidence['passed'] else 1
             return 0
         with psycopg.connect(url,autocommit=True) as conn:
             if args.command == 'init-db':

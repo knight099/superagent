@@ -53,6 +53,10 @@ class PlannerConfig(StrictModel):
     model: str = 'gpt-4.1-mini'
     key_env: Name = 'OPENAI_API_KEY'
     timeout_seconds: int = Field(default=30, ge=1, le=120)
+    max_calls_per_day: int = Field(default=100, ge=0, le=1000000)
+    max_prompt_bytes: int = Field(default=65536, ge=1024, le=262144)
+    max_response_bytes: int = Field(default=131072, ge=1024, le=262144)
+    max_completion_tokens: int = Field(default=4096, ge=128, le=16384)
 
 
 class AuthConfig(StrictModel):

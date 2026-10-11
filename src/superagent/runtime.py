@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 from urllib.parse import urlsplit
+from time import perf_counter
 import psycopg
 from psycopg.types.json import Jsonb
 from pydantic import ValidationError
@@ -21,7 +22,7 @@ class Runtime:
         self.database_url = database_url
         self.config, self.catalog, self.planner = config, catalog, planner
 
-    def _plan(self, intent, identity, supplied):
+    def _plan(self, intent, identity, supplied, record=None):
         if supplied is not None:
             data = supplied.model_dump() if isinstance(supplied, TransitionPlan) else supplied
             return TransitionPlan.model_validate(data)
@@ -31,7 +32,10 @@ class Runtime:
         ledger = UsageLedger(self.database_url)
         provider_config = getattr(self.planner,'config',self.config.planner)
         attempt = ledger.begin(self.config.app,'intent_plan',
-            urlsplit(provider_config.url).hostname or 'custom',provider_config.model)
+            urlsplit(provider_config.url).hostname or 'custom',provider_config.model,
+            limit=provider_config.max_calls_per_day)
+        if record is not None:
+            record['planner_attempt_id']=attempt
         try:
             output = self.planner.plan(intent, self.catalog, self.config, identity)
             result = TransitionPlan.model_validate(output.model_dump() if isinstance(
@@ -66,6 +70,7 @@ class Runtime:
     def execute(self, intent, identity, key=None, *, dry_run=False, plan=None,
                 tool_request=None, registry=None):
         audit_id = str(uuid4())
+        clock_start = perf_counter()
         proposed = None
         started = datetime.now(timezone.utc).isoformat()
         record = {'audit_id':audit_id, 'app':self.config.app, 'identity':identity, 'intent':intent,
@@ -122,8 +127,12 @@ class Runtime:
                         if existing[0] != fingerprint:
                             raise Rejection('idempotency key conflicts with a different request')
                         if existing[1] is not None:
+                            from .observability import emit
+                            emit({'app':self.config.app,'audit_id':existing[1]['audit_id'],
+                                  'status':existing[1]['status'],
+                                  'duration_ms':round((perf_counter()-clock_start)*1000,3)},replayed=True)
                             return existing[1]
-                    proposed = self._plan(intent, identity, plan)
+                    proposed = self._plan(intent, identity, plan, record)
                     record['plan'] = proposed.model_dump()
                     if self.planner is not None and plan is None:
                         record['planner_usage'] = getattr(self.planner, 'usage', {})
@@ -142,11 +151,14 @@ class Runtime:
                     result = json_safe(result)
                     record.update({'status':result['status'], 'validation':'accepted',
                                    'result':result, 'finished_at':datetime.now(timezone.utc).isoformat()})
+                    record['duration_ms']=round((perf_counter()-clock_start)*1000,3)
                     write_audit(conn, audit_id, record, self.config)
                     if key is not None and not dry_run:
                         conn.execute('''UPDATE superagent_internal.requests SET response=%s
                             WHERE app=%s AND identity=%s AND key=%s''',
                             (Jsonb(result),self.config.app,scope,key))
+                from .observability import emit
+                emit(record)
                 return result
         except Exception as exc:
             if isinstance(exc, Rejection):
@@ -163,6 +175,7 @@ class Runtime:
                 record['plan'] = proposed.model_dump()
             record.update({'status':'rejected','validation':'rejected', 'error':error,
                            'finished_at':datetime.now(timezone.utc).isoformat()})
+            record['duration_ms']=round((perf_counter()-clock_start)*1000,3)
             try:
                 with psycopg.connect(self.database_url, autocommit=True) as conn:
                     with conn.transaction():
@@ -172,4 +185,6 @@ class Runtime:
             except Exception:
                 result['error'] = {'code':'audit_unavailable',
                                   'message':'Required audit storage is unavailable; no success reported'}
+            from .observability import emit
+            emit(record)
             return result

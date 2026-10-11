@@ -66,3 +66,19 @@ def test_supplied_tool_has_no_planner_attempts(db,db_url):
     service,registry,tool=configured(db,db_url,DeclaredUsage())
     assert service.execute(tool.tool_id,1,{'title':'direct'},{'user_id':1},'tool')['status']=='committed'
     assert UsageLedger(db_url).report(tool.app,'2000-01-01','2100-01-01')['attempts']==0
+
+
+def test_concurrent_agent_budget_reserves_only_one_attempt(db,db_url):
+    from concurrent.futures import ThreadPoolExecutor
+    from superagent.usage import UsageLedger
+    initialize_internal(db)
+    ledger=UsageLedger(db_url)
+    def reserve(_):
+        try:
+            return ledger.begin('test','draft','provider','model',limit=1)
+        except ValueError:
+            return None
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        attempts=list(pool.map(reserve,range(4)))
+    assert len([attempt for attempt in attempts if attempt])==1
+    assert ledger.report('test','2000-01-01','2100-01-01')['attempts']==1

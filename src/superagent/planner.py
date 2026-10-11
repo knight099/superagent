@@ -67,21 +67,36 @@ class OpenAIPlanner:
             # Deterministic Pydantic parsing remains the mandatory strict boundary.
             'response_format':{'type':'json_schema','json_schema':{'name':'transition_plan',
                 'strict':False,'schema':TransitionPlan.model_json_schema()}},
-            'max_completion_tokens':4096,
+            'max_completion_tokens':self.config.max_completion_tokens,
         }
+        return self._request(payload,TransitionPlan)
+
+    def propose(self, contract, context, system):
+        """A bounded structured proposal; caller independently validates its app scope."""
+        payload={'model':self.config.model,
+            'messages':[{'role':'system','content':system},
+                        {'role':'user','content':json.dumps(context)}],
+            'response_format':{'type':'json_schema','json_schema':{
+                'name':contract.__name__.lower(),'strict':False,'schema':contract.model_json_schema()}},
+            'max_completion_tokens':self.config.max_completion_tokens}
+        return self._request(payload,contract)
+
+    def _request(self,payload,contract):
         self._usage.set({})
+        if len(json.dumps(payload).encode())>self.config.max_prompt_bytes:
+            raise PlannerError('provider context exceeds size limit')
         def request(client):
             try:
                 response = client.post(self.config.url, json=payload,
                     headers={'Authorization':f'Bearer {self.api_key}'},
                     timeout=self.config.timeout_seconds)
                 response.raise_for_status()
-                if len(response.content) > 131072:
+                if len(response.content) > self.config.max_response_bytes:
                     raise PlannerError('provider response exceeds size limit')
                 body = response.json()
                 self._usage.set(body.get('usage',{}))
                 content = body['choices'][0]['message']['content']
-                plan = TransitionPlan.model_validate_json(content)
+                plan = contract.model_validate_json(content)
                 return plan
             except httpx.HTTPError as exc:
                 raise PlannerError('provider request failed') from exc

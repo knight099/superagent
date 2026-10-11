@@ -15,14 +15,16 @@ class ToolRegistry:
     def __init__(self,database_url):
         self.database_url=database_url
 
-    def publish(self,manifest):
+    def publish(self,manifest,*,evaluation=None):
         manifest=ToolManifest.model_validate(manifest.model_dump())
+        from ..evaluations import verify_report
+        evidence=verify_report(evaluation,manifest)
         content=artifact_digest(manifest)
         with psycopg.connect(self.database_url) as conn:
             conn.execute('''INSERT INTO superagent_internal.tools
-                (app,tool_id,version,digest,manifest,status) VALUES (%s,%s,%s,%s,%s,'active')
+                (app,tool_id,version,digest,manifest,status,evaluation) VALUES (%s,%s,%s,%s,%s,'active',%s)
                 ON CONFLICT DO NOTHING''', (manifest.app,manifest.tool_id,manifest.version,
-                                           content,Jsonb(manifest.model_dump())))
+                                           content,Jsonb(manifest.model_dump()),Jsonb(evidence)))
             existing=conn.execute('''SELECT digest FROM superagent_internal.tools
                 WHERE app=%s AND tool_id=%s AND version=%s FOR UPDATE''',
                 (manifest.app,manifest.tool_id,manifest.version)).fetchone()
@@ -31,12 +33,14 @@ class ToolRegistry:
         return content
 
     def load_for_execution(self,conn,app,tool_id,version):
-        row=conn.execute('''SELECT manifest,digest,status FROM superagent_internal.tools
+        row=conn.execute('''SELECT manifest,digest,status,evaluation FROM superagent_internal.tools
             WHERE app=%s AND tool_id=%s AND version=%s FOR SHARE''',
             (app,tool_id,version)).fetchone()
         if row is None or row[2]!='active':
             raise Rejection('tool is unknown or revoked')
         manifest=ToolManifest.model_validate(row[0])
+        from ..evaluations import verify_report
+        verify_report(row[3],manifest)
         if (manifest.app,manifest.tool_id,manifest.version)!=(app,tool_id,version) or artifact_digest(manifest)!=row[1]:
             raise Rejection('tool artifact integrity check failed')
         return manifest
