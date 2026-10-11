@@ -16,7 +16,7 @@ pytest. Keep the existing dependency set; PostgreSQL is registry/ledger storage.
 
 **Spec:** [Adaptive backend design](../specs/2026-10-11-adaptive-backend-design.md).
 
-**Status:** Implemented and under final release review, including app-wide schemas, guardrails,
+**Status:** Completed, pushed to main, and verified with 144 tests and passing CI, including app-wide schemas, guardrails,
 evals and agent observability requested by the owner. v0.3–v0.5 still require
 separate task plans at their milestones.
 

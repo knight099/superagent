@@ -1,9 +1,13 @@
 # Adaptive application backends: proposed architecture
 
-Status: approved v0.2 design; implementation in progress. Baseline: Superagent v0.1, commit
+Status: approved v0.2 design; v0.2 completed and verified. Baseline: Superagent v0.1, commit
 `b8543ba`. This document responds to the request for application-scoped agents,
 on-demand backend generation, reusable tools/APIs, tracking, caching, SOLID
 boundaries, local installation, and lower total cost.
+
+The founder-first onboarding and admin-console revision is proposed in
+[Founder console design](2026-10-11-founder-console-design.md). Its milestone order
+updates the original roadmap below; the new scope is not yet implemented.
 
 ## Intent and assumptions
 
