@@ -263,7 +263,9 @@ Default guardrails include a **100-call/day per-app model budget**, bounded
 provider context/response bytes, a 64 KiB HTTP body limit, denied initial
 permissions, immutable tool versions, explicit evaluation/publication and
 revocation. Configure `planner.max_calls_per_day`, `max_prompt_bytes`,
-`max_response_bytes` and `max_completion_tokens` as the owner. The call cap is
+`max_response_bytes` and `max_completion_tokens` as the owner. Provider responses
+are streamed with a byte bound; compressed responses are rejected. Elapsed time
+is checked between chunks, alongside HTTPX inactivity timeouts. The call cap is
 not a guaranteed dollar cap. Exhausting it leaves approved no-model tools
 available. Tool definitions are reused; private results and authorization
 decisions are not cached. Production identity/gateway requirements still apply.

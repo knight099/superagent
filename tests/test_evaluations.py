@@ -99,3 +99,19 @@ def test_empty_expected_map_does_not_claim_result_assertions(db,db_url):
     suite[0]['expected_rows']={}
     with pytest.raises(ValueError):
         evaluate(tool,suite,cfg,db_url)
+
+
+def test_evaluation_checks_deferred_constraints_before_certifying_commit(db,db_url):
+    from superagent.evaluations import evaluate,verify_report
+    from superagent.tools.models import ToolManifest
+    db.execute('ALTER TABLE tasks ALTER CONSTRAINT tasks_assignee_id_fkey DEFERRABLE INITIALLY DEFERRED')
+    tool,cfg=candidate(db)
+    data=tool.model_dump()
+    data['plan']['operations'][0]['values']['assignee_id']=999
+    tool=ToolManifest.model_validate(data)
+    report=evaluate(tool,cases(),cfg,db_url)
+    assert report['passed'] is False
+    assert report['results'][0]['actual_status']=='rejected'
+    assert report['results'][0]['error_code']=='23503'
+    with pytest.raises(ValueError):
+        verify_report(report,tool)

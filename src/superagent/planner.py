@@ -4,6 +4,7 @@ import os
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Protocol
+from time import monotonic
 import httpx
 from .models import TransitionPlan
 
@@ -87,20 +88,36 @@ class OpenAIPlanner:
             raise PlannerError('provider context exceeds size limit')
         def request(client):
             try:
-                response = client.post(self.config.url, json=payload,
-                    headers={'Authorization':f'Bearer {self.api_key}'},
-                    timeout=self.config.timeout_seconds)
-                response.raise_for_status()
-                if len(response.content) > self.config.max_response_bytes:
-                    raise PlannerError('provider response exceeds size limit')
-                body = response.json()
+                deadline = monotonic() + self.config.timeout_seconds
+                with client.stream('POST', self.config.url, json=payload,
+                        headers={'Authorization':f'Bearer {self.api_key}',
+                                 'Accept-Encoding':'identity'},
+                        timeout=self.config.timeout_seconds) as response:
+                    response.raise_for_status()
+                    # Reject compression before bounded reads to prevent decompression inflation.
+                    if response.headers.get('content-encoding','identity').lower() != 'identity':
+                        raise PlannerError('compressed provider responses are unsupported')
+                    chunks = []
+                    size = 0
+                    for chunk in response.iter_bytes(chunk_size=min(16384,self.config.max_response_bytes)):
+                        if monotonic() > deadline:
+                            raise PlannerError('provider response exceeds time limit')
+                        size += len(chunk)
+                        if size > self.config.max_response_bytes:
+                            raise PlannerError('provider response exceeds size limit')
+                        chunks.append(chunk)
+                    if monotonic() > deadline:
+                        raise PlannerError('provider response exceeds time limit')
+                    body = json.loads(b''.join(chunks))
                 self._usage.set(body.get('usage',{}))
                 content = body['choices'][0]['message']['content']
                 plan = contract.model_validate_json(content)
                 return plan
+            except PlannerError:
+                raise
             except httpx.HTTPError as exc:
                 raise PlannerError('provider request failed') from exc
-            except (ValueError, KeyError, TypeError, IndexError) as exc:
+            except (ValueError, KeyError, TypeError, IndexError, RecursionError) as exc:
                 raise PlannerError('provider returned an invalid transition plan') from exc
         if self.client:
             return request(self.client)

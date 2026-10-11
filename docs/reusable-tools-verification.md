@@ -15,8 +15,8 @@ Checked 2026-10-11 against real PostgreSQL 16. v0.2 extends the earlier
 | Guarded release | Publish rejects absent/failed/mismatched eval evidence; versions immutable; revoked tools reject even retries | Reports are local owner-controlled evidence, not cryptographic independent attestations |
 | Drift handling | Fresh allowed-schema/policy comparisons before tool execution; changed default expressions invalidate tools | Coordinated config reload/DDL required; DB triggers/components remain trusted |
 | Independent accounting | Model-attempt rows survive business rollback and malformed output | Missing usage/unpriced calls remain unknown; provider billing authoritative |
-| Bounded inference | Transactional per-app daily call reservation, context/output/token bounds, provider timeout | Call cap is not a guaranteed dollar budget; no automatic repairs/fan-out yet |
-| Evaluation isolation | Cases execute in force-rollback transactions on a separate CLI-selected disposable DB | Sequences and external trigger effects cannot be undone; never use real application data |
+| Bounded inference | Transactional per-app daily call reservation, context/output/token bounds, streamed uncompressed response bounds and between-chunk deadline | Call cap is not a guaranteed dollar budget; no automatic repairs/fan-out yet |
+| Evaluation isolation | Cases force deferred constraints before rollback on a separate CLI-selected disposable DB | Sequences and external trigger effects cannot be undone; never use real application data |
 | Observability | App-scoped outcome/latency/tool aggregates, purpose-specific attempts, structured audit/attempt correlation | Aggregate/log exports omit identity, intent and rows; original intent remains in controlled audit |
 | Optional telemetry failure | Broken log sink cannot turn an already committed operation into rejection | Required transactional audit failure still rolls back |
 | Input bounds | 64 KiB ASGI body bound before JSON parsing, strict argument/plan contracts | Rejected HTTP validation/body-limit requests do not enter runtime audit |
@@ -30,7 +30,7 @@ uv run ruff check .
 uv build
 ```
 
-At release verification, **140 tests passed**, including all earlier safety
+At release verification, **144 tests passed**, including all earlier safety
 regressions. Starlette/httpx TestClient emits one upstream deprecation warning.
 Both wheel and source distribution built. An isolated wheel installation passed
 real CLI and HTTP service smoke checks on two newly created disposable databases:
@@ -57,9 +57,9 @@ concurrent load, real model latency and production capacity are not measured.
 
 | Path | Requests | Provider calls | Errors | Ownership checks | p50 / p95 milliseconds |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Explicit backend plan baseline | 1,000 | 0 | 0 | 1,000 | 11.360 / 16.595 |
-| Approved reusable tool | 1,000 | 0 | 0 | 1,000 | 23.588 / 32.072 |
-| Scripted provider intent path | 1,000 | 1,000 | 0 | 1,000 | 36.625 / 48.645 |
+| Explicit backend plan baseline | 1,000 | 0 | 0 | 1,000 | 12.146 / 20.011 |
+| Approved reusable tool | 1,000 | 0 | 0 | 1,000 | 23.523 / 34.351 |
+| Scripted provider intent path | 1,000 | 1,000 | 0 | 1,000 | 37.306 / 61.027 |
 
 The baseline represents developer-supplied deterministic backend behavior through
 the same policy/audit executor, not a complete separately deployed backend app.
@@ -112,3 +112,5 @@ committed retries to claim lower connection usage. Optional result caching and
 semantic routing are not implemented; fresh state and authorization remain
 mandatory. Audit aggregates include v0.2 app-tagged records and exclude legacy
 untagged records, replays and requests rejected before the runtime.
+
+Implementation choices and review resolutions are recorded in [v0.2 decisions](v02-decisions.md).

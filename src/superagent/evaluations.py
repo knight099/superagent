@@ -91,6 +91,8 @@ def evaluate(manifest,cases,config,database_url,*,production_url=None):
                         raise Rejection('evaluation identity type mismatch')
                     plan=bind(manifest,case.arguments,{'user_id':user})
                     changes=Executor(config,catalog).execute(conn,plan,{'user_id':user})
+                    # Rollback does not check constraints normally deferred until commit.
+                    conn.execute('SET CONSTRAINTS ALL IMMEDIATE')
                     if case.expected_rows is not None:
                         by_id={change['id']:json_safe(change['rows']) for change in changes}
                         for op,expected in case.expected_rows.items():
