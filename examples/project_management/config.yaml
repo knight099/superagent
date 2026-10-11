@@ -1,0 +1,65 @@
+app: project_management
+database:
+  url_env: DATABASE_URL
+auth:
+  mode: trusted_header
+planner:
+  model: gpt-4.1-mini
+  key_env: OPENAI_API_KEY
+limits:
+  max_operations: 20
+  max_rows: 100
+  max_read_rows: 100
+  statement_timeout_ms: 2000
+tables:
+  public.users:
+    columns: [id, name]
+    permissions:
+      select: true
+  public.projects:
+    columns: [id, name, owner_id, due_date]
+    permissions:
+      select: true
+  public.project_members:
+    columns: [project_id, user_id]
+    permissions:
+      select: true
+  public.tasks:
+    columns: [id, title, project_id, creator_id, assignee_id, priority, done, created_at, due_date]
+    permissions:
+      select: &creator_or_assignee
+        op: any
+        args:
+          - &creator
+            op: eq
+            left: {source: row, field: creator_id}
+            right: {source: identity, field: user_id}
+          - op: eq
+            left: {source: row, field: assignee_id}
+            right: {source: identity, field: user_id}
+      insert: *creator
+      update: *creator_or_assignee
+      delete: *creator
+    after:
+      update:
+        op: eq
+        left: {source: after, field: creator_id}
+        right: {source: before, field: creator_id}
+    invariants:
+      - op: any
+        args:
+          - op: is_null
+            left: {source: before, field: done}
+          - op: eq
+            left: {source: before, field: done}
+            right: false
+          - op: eq
+            left: {source: after, field: done}
+            right: true
+      - op: not
+        args:
+          - op: is_null
+            left: {source: after, field: assignee_id}
+      - op: gte
+        left: {source: after, field: due_date}
+        right: {source: after, field: created_at}

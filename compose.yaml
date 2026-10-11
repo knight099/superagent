@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: superagent
+      POSTGRES_PASSWORD: superagent_dev
+      POSTGRES_DB: superagent
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./examples/project_management/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./examples/project_management/seed_overdue.sql:/docker-entrypoint-initdb.d/02-overdue.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superagent -d superagent"]
+      interval: 2s
+      timeout: 2s
+      retries: 20

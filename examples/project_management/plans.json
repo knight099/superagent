@@ -1,0 +1,242 @@
+[
+  [
+    "Create a high-priority task for Rahul due Friday",
+    {
+      "operations": [
+        {
+          "id": "rahul",
+          "kind": "select",
+          "table": "public.users",
+          "select": [
+            "id"
+          ],
+          "where": [
+            {
+              "field": "name",
+              "op": "eq",
+              "value": "Rahul"
+            }
+          ]
+        },
+        {
+          "id": "create",
+          "kind": "insert",
+          "table": "public.tasks",
+          "values": {
+            "title": "Demo high priority task",
+            "project_id": 1,
+            "creator_id": 1,
+            "assignee_id": {
+              "ref": "rahul",
+              "column": "id"
+            },
+            "priority": "high",
+            "due_date": "2026-10-16"
+          },
+          "returning": [
+            "id",
+            "title",
+            "assignee_id"
+          ]
+        }
+      ]
+    },
+    "committed"
+  ],
+  [
+    "Move all John's unfinished tasks to Rahul",
+    {
+      "operations": [
+        {
+          "id": "john",
+          "kind": "select",
+          "table": "public.users",
+          "select": [
+            "id"
+          ],
+          "where": [
+            {
+              "field": "name",
+              "op": "eq",
+              "value": "John"
+            }
+          ]
+        },
+        {
+          "id": "rahul",
+          "kind": "select",
+          "table": "public.users",
+          "select": [
+            "id"
+          ],
+          "where": [
+            {
+              "field": "name",
+              "op": "eq",
+              "value": "Rahul"
+            }
+          ]
+        },
+        {
+          "id": "move",
+          "kind": "update",
+          "table": "public.tasks",
+          "values": {
+            "assignee_id": {
+              "ref": "rahul",
+              "column": "id"
+            }
+          },
+          "where": [
+            {
+              "field": "assignee_id",
+              "op": "eq",
+              "value": {
+                "ref": "john",
+                "column": "id"
+              }
+            },
+            {
+              "field": "done",
+              "op": "eq",
+              "value": false
+            }
+          ],
+          "returning": [
+            "id",
+            "assignee_id"
+          ]
+        }
+      ]
+    },
+    "committed"
+  ],
+  [
+    "Find my overdue unfinished tasks",
+    {
+      "operations": [
+        {
+          "id": "overdue",
+          "kind": "select",
+          "table": "public.tasks",
+          "select": [
+            "id",
+            "title",
+            "due_date"
+          ],
+          "where": [
+            {
+              "field": "due_date",
+              "op": "lt",
+              "value": "2026-10-11"
+            },
+            {
+              "field": "done",
+              "op": "eq",
+              "value": false
+            }
+          ]
+        }
+      ]
+    },
+    "committed"
+  ],
+  [
+    "Set my normal-priority unfinished tasks to low priority",
+    {
+      "operations": [
+        {
+          "id": "bounded",
+          "kind": "update",
+          "table": "public.tasks",
+          "values": {
+            "priority": "low"
+          },
+          "where": [
+            {
+              "field": "creator_id",
+              "op": "eq",
+              "value": 1
+            },
+            {
+              "field": "done",
+              "op": "eq",
+              "value": false
+            },
+            {
+              "field": "priority",
+              "op": "eq",
+              "value": "normal"
+            }
+          ],
+          "returning": [
+            "id",
+            "priority"
+          ]
+        }
+      ]
+    },
+    "committed"
+  ],
+  [
+    "Change task 3 owned by Alice to Unauthorized",
+    {
+      "operations": [
+        {
+          "id": "denied",
+          "kind": "update",
+          "table": "public.tasks",
+          "values": {
+            "title": "Unauthorized"
+          },
+          "where": [
+            {
+              "field": "id",
+              "op": "eq",
+              "value": 3
+            }
+          ]
+        }
+      ]
+    },
+    "rejected"
+  ],
+  [
+    "Complete task 1 then reopen it",
+    {
+      "operations": [
+        {
+          "id": "complete",
+          "kind": "update",
+          "table": "public.tasks",
+          "values": {
+            "done": true
+          },
+          "where": [
+            {
+              "field": "id",
+              "op": "eq",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "reopen",
+          "kind": "update",
+          "table": "public.tasks",
+          "values": {
+            "done": false
+          },
+          "where": [
+            {
+              "field": "id",
+              "op": "eq",
+              "value": 1
+            }
+          ]
+        }
+      ]
+    },
+    "rejected"
+  ]
+]
