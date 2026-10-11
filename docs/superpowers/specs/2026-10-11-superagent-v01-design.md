@@ -1,6 +1,6 @@
 # Superagent v0.1 design
 
-Status: proposed for review. Source: https://github.com/knight099/superagent/issues/1.
+Status: approved; v0.1 implemented and verified on 2026-10-11. Source: https://github.com/knight099/superagent/issues/1.
 
 ## Purpose and success criteria
 

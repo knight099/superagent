@@ -34,10 +34,10 @@
 
 **Interfaces:** `TransitionPlan.model_validate(data)`; `Config.model_validate(data)`; `introspect(conn, config) -> Catalog`; `validate(plan, catalog, config) -> None`; `compile_operation(op, resolved_values=None) -> Statement`.
 
-- [ ] Write core tests for strict shape rejection, unsafe fields, generated columns, missing required columns, unknown objects, limits, references and injection values.
-- [ ] Run `pytest tests/test_core.py -q`; expect missing implementation failures.
-- [ ] Implement typed metadata, configuration, validation, compiler, and static explain output. SQL identifiers use Psycopg composition; values are bound parameters.
-- [ ] Run `pytest -q`; expect all current tests pass. Commit `feat: add strict plans and safe dry-run compilation`.
+- [x] Write core tests for strict shape rejection, unsafe fields, generated columns, missing required columns, unknown objects, limits, references and injection values.
+- [x] Run `pytest tests/test_core.py -q`; expect missing implementation failures.
+- [x] Implement typed metadata, configuration, validation, compiler, and static explain output. SQL identifiers use Psycopg composition; values are bound parameters.
+- [x] Run `pytest -q`; expect all current tests pass. Commit `feat: add strict plans and safe dry-run compilation`.
 
 ## Task 2: PostgreSQL transactions and bounds
 
@@ -45,10 +45,10 @@
 
 **Interfaces:** `Executor.execute(conn, plan, identity) -> list[dict]`; `resolve_value(value, results) -> scalar`; `evaluate(expression, context) -> bool`.
 
-- [ ] Write real PostgreSQL tests for introspection, commit, late failure rollback, result references, ambiguous references, affected-row bounds, read limits, timeout and numeric/date calculations.
-- [ ] Run `pytest tests/test_execution.py -q`; expect missing executor failures.
-- [ ] Implement transactions, row locks, timeout, bounded operations and references; never retry a mutation automatically.
-- [ ] Run `pytest -q`; expect all pass. Commit `feat: execute bounded atomic PostgreSQL plans`.
+- [x] Write real PostgreSQL tests for introspection, commit, late failure rollback, result references, ambiguous references, affected-row bounds, read limits, timeout and numeric/date calculations.
+- [x] Run `pytest tests/test_execution.py -q`; expect missing executor failures.
+- [x] Implement transactions, row locks, timeout, bounded operations and references; never retry a mutation automatically.
+- [x] Run `pytest -q`; expect all pass. Commit `feat: execute bounded atomic PostgreSQL plans`.
 
 ## Task 3: Generic policies and invariants
 
@@ -56,10 +56,10 @@
 
 **Interfaces:** typed `Expression` AST; `policy_sql(expr, identity) -> Statement`; `check_invariants(rules, before, after, identity) -> None`.
 
-- [ ] Write allow/deny, absent claim under negation, row access, ownership escalation, defaults, and invariant rollback tests.
-- [ ] Run the new tests; expect failures on missing policy behavior.
-- [ ] Implement read/mutation row filters and transactional before/after assertions using the shared bounded AST. Reject inaccessible fields at startup.
-- [ ] Run `pytest -q`; expect all pass. Commit `feat: enforce declarative row policies and invariants`.
+- [x] Write allow/deny, absent claim under negation, row access, ownership escalation, defaults, and invariant rollback tests.
+- [x] Run the new tests; expect failures on missing policy behavior.
+- [x] Implement read/mutation row filters and transactional before/after assertions using the shared bounded AST. Reject inaccessible fields at startup.
+- [x] Run `pytest -q`; expect all pass. Commit `feat: enforce declarative row policies and invariants`.
 
 ## Task 4: Runtime, idempotency and audit
 
@@ -67,10 +67,10 @@
 
 **Interfaces:** `Runtime.execute(intent, identity, key, dry_run=False, plan=None) -> dict`; `Runtime.explain(plan, identity) -> dict`; `initialize_internal(conn) -> None`.
 
-- [ ] Write PostgreSQL tests proving sequential and concurrent retries execute once, key conflicts reject, committed/failed audit records persist, dry-run never mutates or claims a key, and rejected adversarial plans cannot execute.
-- [ ] Run new tests; expect missing runtime failures.
-- [ ] Implement durable request claims, request fingerprints, saved responses, rollback audit, redaction, correlation IDs and structured errors. Planner must run only after replay lookup.
-- [ ] Run `pytest -q`; expect all pass. Commit `feat: persist audit and idempotent execution`.
+- [x] Write PostgreSQL tests proving sequential and concurrent retries execute once, key conflicts reject, committed/failed audit records persist, dry-run never mutates or claims a key, and rejected adversarial plans cannot execute.
+- [x] Run new tests; expect missing runtime failures.
+- [x] Implement durable request claims, request fingerprints, saved responses, rollback audit, redaction, correlation IDs and structured errors. Planner must run only after replay lookup.
+- [x] Run `pytest -q`; expect all pass. Commit `feat: persist audit and idempotent execution`.
 
 ## Task 5: Planner, API, CLI and usable example
 
@@ -78,16 +78,16 @@
 
 **Interfaces:** `Planner.plan(intent, catalog, config, identity) -> TransitionPlan`; `create_app(runtime) -> FastAPI`; console entry `superagent = superagent.cli:main`.
 
-- [ ] Write tests for malformed provider output, minimized context, provider HTTP failures, trusted-header identity, payload restrictions, configuration parsing and CLI bootstrap/explain.
-- [ ] Run new tests; expect missing adapter failures.
-- [ ] Implement an OpenAI-compatible provider with strict output parsing, HTTP timeout, no database tools and no arbitrary endpoints supplied by clients. Add bootstrap/run/explain CLI and intent API.
-- [ ] Implement seven demos using fixture plans and a live-model option; record workflow/configuration/latency metrics. Document supported DSL, limits, deployment trust and deferred checks.
-- [ ] Run `pytest -q`, `ruff check .`, `superagent --help`, build the wheel, and run all seven demos against PostgreSQL; expect successful checks and expected rejection demos.
-- [ ] Commit `feat: ship v0.1 intent API CLI and project management demos`.
+- [x] Write tests for malformed provider output, minimized context, provider HTTP failures, trusted-header identity, payload restrictions, configuration parsing and CLI bootstrap/explain.
+- [x] Run new tests; expect missing adapter failures.
+- [x] Implement an OpenAI-compatible provider with strict output parsing, HTTP timeout, no database tools and no arbitrary endpoints supplied by clients. Add bootstrap/run/explain CLI and intent API.
+- [x] Implement seven demos using fixture plans and a live-model option; record workflow/configuration/latency metrics. Document supported DSL, limits, deployment trust and deferred checks.
+- [x] Run `pytest -q`, `ruff check .`, `superagent --help`, build the wheel, and run all seven demos against PostgreSQL; expect successful checks and expected rejection demos.
+- [x] Commit `feat: ship v0.1 intent API CLI and project management demos`.
 
 ## Final verification and integration
 
-- [ ] Obtain whole-branch independent review; fix security/correctness findings with reproducing tests.
-- [ ] Run full unit/integration suite, lint, package build and demos after fixes.
-- [ ] Fetch origin and inspect divergence before integrating. Never force-push.
-- [ ] Merge tested changes into main and push, then verify the remote main SHA. Tag v0.1.0 only if release checks pass.
+- [x] Obtain whole-branch independent review; fix security/correctness findings with reproducing tests.
+- [x] Run full unit/integration suite, lint, package build and demos after fixes.
+- [x] Fetch origin and inspect divergence before integrating. Never force-push.
+- [x] Merge tested changes into main and push, then verify the remote main SHA. Package version is 0.1.0; no GitHub release is created.
