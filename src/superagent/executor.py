@@ -20,7 +20,8 @@ class Executor:
                          (str(self.config.limits.statement_timeout_ms),))
             with conn.cursor(row_factory=dict_row) as cur:
                 for op in plan.operations:
-                    resolve = lambda value: resolve_value(value, results)
+                    def resolve(value):
+                        return resolve_value(value, results)
                     cfg = self.config.tables[op.table]
                     table = self.catalog.tables[op.table]
                     qualified = sql.Identifier(*op.table.split('.'))

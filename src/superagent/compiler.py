@@ -40,7 +40,8 @@ def predicate_sql(predicates, resolve=None):
 def compile_operation(op, resolve=None):
     table = sql.Identifier(*op.table.split('.'))
     where = predicate_sql(getattr(op, 'where', []), resolve)
-    names = lambda fields: sql.SQL(', ').join(map(sql.Identifier, fields))
+    def names(fields):
+        return sql.SQL(', ').join(map(sql.Identifier, fields))
     params = []
     if op.kind == 'select':
         query = sql.SQL('SELECT {} FROM {} WHERE {} LIMIT %s').format(

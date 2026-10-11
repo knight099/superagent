@@ -1,0 +1,83 @@
+"""Bootstrap, explain, execute and host the same application-independent runtime."""
+import argparse
+from importlib.resources import files
+import json
+import os
+from pathlib import Path
+import sys
+import psycopg
+from .config import load_config
+from .schema import introspect
+from .models import TransitionPlan
+from .runtime import Runtime
+from .audit import initialize_internal
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog='superagent')
+    sub = parser.add_subparsers(dest='command',required=True)
+    init = sub.add_parser('init',help='Write the editable project-management config')
+    init.add_argument('--config',default='superagent.yaml')
+    for name in ('init-db','explain','execute','run'):
+        cmd = sub.add_parser(name)
+        cmd.add_argument('--config',default='superagent.yaml')
+        if name in ('explain','execute'):
+            cmd.add_argument('--user-id',required=True)
+            cmd.add_argument('--plan')
+            cmd.add_argument('--intent',default='Explain supplied plan' if name == 'explain' else None)
+            if name == 'execute':
+                cmd.add_argument('--key')
+        if name == 'run':
+            cmd.add_argument('--host',default='127.0.0.1')
+            cmd.add_argument('--port',type=int,default=8000)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == 'init':
+            data = files('superagent').joinpath('templates/project_management.yaml').read_text()
+            with Path(args.config).open('x') as handle:
+                handle.write(data)
+            print(f'Created {args.config}. Configure table allowlists, policies, and DATABASE_URL.')
+            return 0
+        cfg = load_config(args.config)
+        url = os.environ.get(cfg.database.url_env)
+        if not url:
+            raise ValueError(f'{cfg.database.url_env} is required')
+        with psycopg.connect(url,autocommit=True) as conn:
+            if args.command == 'init-db':
+                initialize_internal(conn)
+                print('Initialized internal audit and idempotency tables.')
+                return 0
+            catalog = introspect(conn,cfg)
+        if args.command == 'run' or not getattr(args,'plan',None):
+            from .planner import OpenAIPlanner
+            planner = OpenAIPlanner(cfg.planner)
+        else:
+            planner = None
+        runtime = Runtime(url,cfg,catalog,planner)
+        if args.command == 'run':
+            import uvicorn
+            from .api import create_app
+            uvicorn.run(create_app(runtime),host=args.host,port=args.port)
+            return 0
+        identity = {'user_id':int(args.user_id) if args.user_id.isascii() and
+                    args.user_id.isdigit() else args.user_id}
+        supplied = TransitionPlan.model_validate_json(Path(args.plan).read_text()) if args.plan else None
+        if args.command == 'explain' and supplied:
+            result = runtime.explain(supplied,identity)
+        else:
+            if not args.intent:
+                raise ValueError('--intent is required')
+            result = runtime.execute(args.intent,identity,getattr(args,'key',None),
+                                     dry_run=args.command == 'explain',plan=supplied)
+        print(json.dumps(result,indent=2,default=str))
+        return 1 if result['status'] == 'rejected' else 0
+    except FileExistsError:
+        print('Config already exists; refusing to overwrite.',file=sys.stderr)
+    except Exception:
+        # Do not emit connection strings, provider response bodies or SQL error values.
+        print('Command failed. Check configuration, credentials, database and plan.',file=sys.stderr)
+    return 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
